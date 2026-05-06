@@ -1,0 +1,386 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Portfolio · Ham</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2"></script>
+    <style>
+        :root {
+            --bg:      #0d1117;
+            --surface: #161b22;
+            --border:  #30363d;
+            --text:    #c9d1d9;
+            --dim:     #8b949e;
+            --green:   #3fb950;
+            --red:     #f85149;
+            --blue:    #58a6ff;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', sans-serif;
+            background: var(--bg); color: var(--text);
+            height: 100vh; display: flex; flex-direction: column;
+            overflow: hidden; font-size: 13px;
+        }
+        header {
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 13px 20px; border-bottom: 1px solid var(--border); flex-shrink: 0;
+        }
+        .logo { font-size: 11px; font-weight: 700; letter-spacing: .14em; color: var(--dim); }
+        .status { display: flex; align-items: center; gap: 8px; font-size: 11px; color: var(--dim); }
+        .dot { width: 5px; height: 5px; border-radius: 50%; background: var(--green); flex-shrink: 0; }
+        .dot.loading { background: #e3b341; animation: blink .9s infinite; }
+        .dot.offline { background: var(--red); }
+        @keyframes blink { 50% { opacity: .2; } }
+        .btn {
+            background: none; border: 1px solid var(--border);
+            color: var(--dim); font-size: 10px; padding: 2px 8px;
+            border-radius: 4px; cursor: pointer; font-family: inherit;
+        }
+        .btn:hover { border-color: var(--dim); color: var(--text); }
+
+        .metrics { display: grid; grid-template-columns: repeat(3,1fr); border-bottom: 1px solid var(--border); flex-shrink: 0; }
+        .metric { padding: 14px 20px; border-right: 1px solid var(--border); }
+        .metric:last-child { border-right: none; }
+        .metric-label { font-size: 10px; color: var(--dim); text-transform: uppercase; letter-spacing: .08em; margin-bottom: 5px; }
+        .metric-value { font-size: 22px; font-weight: 700; letter-spacing: -.03em; font-variant-numeric: tabular-nums; }
+
+        .body { display: flex; flex: 1; min-height: 0; }
+        .chart-side { flex: 1; padding: 14px 12px; border-right: 1px solid var(--border); display: flex; flex-direction: column; }
+        .chart-wrap { flex: 1; position: relative; min-height: 0; }
+        .table-side { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+        .toolbar { display: flex; align-items: center; justify-content: space-between; padding: 6px 12px; border-bottom: 1px solid var(--border); flex-shrink: 0; }
+        .toolbar-label { font-size: 10px; color: var(--dim); font-weight: 600; letter-spacing: .08em; }
+        .sort-group { display: flex; gap: 2px; }
+        .sb { background: none; border: none; font-size: 10px; font-weight: 600; letter-spacing: .05em; color: var(--dim); padding: 3px 9px; border-radius: 4px; cursor: pointer; font-family: inherit; }
+        .sb.on { color: var(--blue); background: rgba(88,166,255,.12); }
+
+        .tscroll { flex: 1; overflow-y: auto; }
+        .tscroll::-webkit-scrollbar { width: 3px; }
+        .tscroll::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+        .tscroll::-webkit-scrollbar-track { background: transparent; }
+
+        table { width: 100%; border-collapse: collapse; }
+        thead th { font-size: 10px; font-weight: 600; color: var(--dim); text-transform: uppercase; letter-spacing: .06em; padding: 6px 12px; text-align: left; position: sticky; top: 0; background: var(--bg); border-bottom: 1px solid var(--border); }
+        thead th.ar { text-align: right; }
+        tbody td { padding: 5px 12px; border-bottom: 1px solid #1c2128; font-variant-numeric: tabular-nums; }
+        tbody tr:last-child td { border-bottom: none; }
+        tbody tr:hover td { background: var(--surface); }
+        td.ar { text-align: right; }
+        .sym { font-weight: 600; }
+        .bk  { font-size: 10px; color: var(--dim); }
+        .sub { font-size: 10px; color: var(--dim); }
+        .g   { color: var(--green); }
+        .r   { color: var(--red); }
+    </style>
+</head>
+<body>
+
+<header>
+    <span class="logo">PORTFOLIO · HAM</span>
+    <div class="status">
+        <div class="dot loading" id="dot"></div>
+        <span id="ts">กำลังโหลด...</span>
+        <button class="btn" onclick="startLoad()">↻</button>
+        <button class="btn" onclick="clearCache()" title="รีเซ็ต cache หุ้น">✕ cache</button>
+        <button class="btn" id="hideBtn" onclick="toggleHide()">hide</button>
+    </div>
+</header>
+
+<div class="metrics">
+    <div class="metric"><div class="metric-label">Total Value</div><div class="metric-value" id="mVal">—</div></div>
+    <div class="metric"><div class="metric-label">Unrealized P/L</div><div class="metric-value" id="mPL">—</div></div>
+    <div class="metric"><div class="metric-label">ROI</div><div class="metric-value" id="mROI">—</div></div>
+</div>
+
+<div class="body">
+    <div class="chart-side">
+        <div class="chart-wrap"><canvas id="chart"></canvas></div>
+    </div>
+    <div class="table-side">
+        <div class="toolbar">
+            <span class="toolbar-label">HOLDINGS</span>
+            <div class="sort-group">
+                <button class="sb on" onclick="doSort('val',this)">SIZE</button>
+                <button class="sb"    onclick="doSort('pct',this)">GAIN%</button>
+                <button class="sb"    onclick="doSort('sym',this)">A–Z</button>
+            </div>
+        </div>
+        <div class="tscroll">
+            <table>
+                <thead><tr>
+                    <th>SYMBOL</th>
+                    <th class="ar">PRICE</th>
+                    <th class="ar">VALUE</th>
+                    <th class="ar">P/L</th>
+                    <th class="ar">%</th>
+                </tr></thead>
+                <tbody id="tbody"></tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<script>
+/* ── Portfolio snapshot: 27 Apr 2026 ──────────────────────────
+   cost = val − pl  (ทุน คงที่ไม่เปลี่ยน)
+   cur  = สกุลเงินใน Yahoo Finance (USD หรือ HKD)
+   yq   = Yahoo Finance symbol
+─────────────────────────────────────────────────────────────── */
+const THB       = 35;
+const CACHE_KEY = 'port_v5';
+let   hidden    = false;
+const REF_TS    = 1777248000;   // 2026-04-27 00:00 UTC (correct)
+
+let PORT = [
+    { broker:'Dime',      sym:'ARM',       yq:'ARM',     cur:'USD', cost:3990.77,  val:6087.74,  pl:2096.97,   pct:52.55  },
+    { broker:'Dime',      sym:'CRWD',      yq:'CRWD',    cur:'USD', cost:4687.21,  val:4411.51,  pl:-275.70,   pct:-5.88  },
+    { broker:'Dime',      sym:'RBRK',      yq:'RBRK',    cur:'USD', cost:1564.88,  val:1077.10,  pl:-487.78,   pct:-31.17 },
+    { broker:'Dime',      sym:'GRAB',      yq:'GRAB',    cur:'USD', cost:1558.46,  val:1006.49,  pl:-551.97,   pct:-35.42 },
+    { broker:'Dime',      sym:'ZS',        yq:'ZS',      cur:'USD', cost:1387.87,  val:769.41,   pl:-618.46,   pct:-44.56 },
+    { broker:'Webull',    sym:'NVDA',      yq:'NVDA',    cur:'USD', cost:1544.65,  val:1779.57,  pl:234.92,    pct:15.21  },
+    { broker:'Webull',    sym:'DDOG',      yq:'DDOG',    cur:'USD', cost:1571.68,  val:1589.99,  pl:18.31,     pct:1.17   },
+    { broker:'Webull',    sym:'AMZN',      yq:'AMZN',    cur:'USD', cost:2222.38,  val:2492.76,  pl:270.38,    pct:12.17  },
+    { broker:'Webull',    sym:'SE',        yq:'SE',      cur:'USD', cost:1569.97,  val:857.50,   pl:-712.47,   pct:-45.38 },
+    { broker:'Webull',    sym:'CRWV',      yq:'CRWV',    cur:'USD', cost:1601.71,  val:1896.04,  pl:294.33,    pct:18.38  },
+    { broker:'Webull',    sym:'MSFT',      yq:'MSFT',    cur:'USD', cost:2238.44,  val:1965.07,  pl:-273.37,   pct:-12.21 },
+    { broker:'Webull',    sym:'NBIS',      yq:'NBIS',    cur:'USD', cost:1601.71,  val:2322.70,  pl:720.99,    pct:45.01  },
+    { broker:'Webull',    sym:'PANW',      yq:'PANW',    cur:'USD', cost:1527.64,  val:1607.43,  pl:79.79,     pct:5.22   },
+    { broker:'Webull',    sym:'AXON',      yq:'AXON',    cur:'USD', cost:3754.00,  val:2604.44,  pl:-1149.56,  pct:-30.62 },
+    { broker:'Streaming', sym:'BABA80',    yq:'9988.HK', cur:'HKD', cost:153.69,   val:229.28,   pl:75.59,     pct:49.19  },
+    { broker:'Streaming', sym:'CATL01',    yq:'3750.HK', cur:'HKD', cost:1460.74,  val:2027.14,  pl:566.40,    pct:38.78  },
+    { broker:'Streaming', sym:'TENCENT80', yq:'0700.HK', cur:'HKD', cost:1164.81,  val:1263.42,  pl:98.61,     pct:8.47   },
+    { broker:'Streaming', sym:'XIAOMI80',  yq:'1810.HK', cur:'HKD', cost:813.27,   val:1334.22,  pl:520.95,    pct:64.06  },
+];
+
+/* ── Chart ── */
+Chart.register(ChartDataLabels);
+let chartInst = null;
+const PALETTE = ['#58a6ff','#3fb950','#e3b341','#a371f7','#f85149','#79c0ff','#56d364','#f0883e','#ff7b72','#d2a8ff','#40d9ff','#89d4f5','#b3f0c0','#ffd700','#ffb347','#ff69b4','#87ceeb','#dda0dd'];
+
+/* ── Hide toggle ── */
+function toggleHide() {
+    hidden = !hidden;
+    document.getElementById('hideBtn').textContent = hidden ? 'show' : 'hide';
+    render();
+}
+const M = v => hidden ? '*****' : v;
+
+/* ── Render ── */
+function render() {
+    const totVal  = PORT.reduce((s,d) => s+d.val,  0);
+    const totPL   = PORT.reduce((s,d) => s+d.pl,   0);
+    const totCost = PORT.reduce((s,d) => s+d.cost, 0);
+    const roi     = (totPL / totCost * 100).toFixed(2);
+
+    document.getElementById('mVal').textContent =
+        hidden ? '*****' : '฿' + Math.round(totVal * THB).toLocaleString('th-TH');
+
+    const plEl = document.getElementById('mPL');
+    plEl.textContent = hidden ? '*****' : (totPL >= 0 ? '+฿' : '-฿') +
+        Math.abs(Math.round(totPL * THB)).toLocaleString('th-TH');
+    plEl.className = 'metric-value ' + (totPL >= 0 ? 'g' : 'r');
+
+    const roiEl = document.getElementById('mROI');
+    roiEl.textContent = hidden ? '*****' : (roi >= 0 ? '+' : '') + roi + '%';
+    roiEl.className = 'metric-value ' + (roi >= 0 ? 'g' : 'r');
+
+    document.getElementById('tbody').innerHTML = PORT.map(s => {
+        const g   = s.pl >= 0 ? 'g' : 'r';
+        const cur = s.cur === 'HKD' ? 'HK$' : '$';
+        const priceStr = hidden ? '*****' : s.price != null
+            ? cur + s.price.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})
+            : '—';
+        const valUSD = hidden ? '*****' : '$' + Math.round(s.val).toLocaleString();
+        const valTHB = hidden ? '*****' : '฿' + Math.round(s.val*THB).toLocaleString('th-TH');
+        const pls    = hidden ? '*****' : (s.pl >= 0 ? '+$' : '-$') + Math.abs(s.pl).toLocaleString(undefined,{maximumFractionDigits:0});
+        const plsTHB = hidden ? '*****' : (s.pl >= 0 ? '+฿' : '-฿') + Math.abs(Math.round(s.pl*THB)).toLocaleString('th-TH');
+        const ps     = hidden ? '*****' : (s.pct >= 0 ? '+' : '') + s.pct.toFixed(1) + '%';
+        return `<tr>
+            <td><div class="sym ${g}">${s.sym}</div><div class="bk">${s.broker}</div></td>
+            <td class="ar ${g}">${priceStr}</td>
+            <td class="ar ${g}">
+                <div>${valUSD}</div>
+                <div class="sub">${valTHB}</div>
+            </td>
+            <td class="ar ${g}">
+                <div>${pls}</div>
+                <div class="sub">${plsTHB}</div>
+            </td>
+            <td class="ar ${g}"><b>${ps}</b></td>
+        </tr>`;
+    }).join('');
+
+    if (chartInst) chartInst.destroy();
+    const sorted = [...PORT].sort((a,b) => b.val - a.val);
+    chartInst = new Chart(document.getElementById('chart'), {
+        type: 'doughnut',
+        data: {
+            labels: sorted.map(s => s.sym),
+            datasets: [{ data: sorted.map(s => s.val), backgroundColor: PALETTE, borderColor:'#0d1117', borderWidth:2, hoverBorderWidth:0 }]
+        },
+        options: {
+            responsive:true, maintainAspectRatio:false, cutout:'55%',
+            plugins: {
+                legend:{ display: false },
+                tooltip:{ callbacks:{ label: ctx => ` $${Math.round(ctx.raw).toLocaleString()}` } },
+                datalabels: {
+                    display: ctx => {
+                        const total = ctx.dataset.data.reduce((a,b) => a+b, 0);
+                        return ctx.dataset.data[ctx.dataIndex] / total >= 0.04;
+                    },
+                    formatter: (_, ctx) => ctx.chart.data.labels[ctx.dataIndex],
+                    color: '#ffffff',
+                    font: { size: 10, weight: '700' },
+                    textShadowBlur: 6,
+                    textShadowColor: 'rgba(0,0,0,0.8)',
+                }
+            }
+        }
+    });
+}
+
+function doSort(key, btn) {
+    document.querySelectorAll('.sb').forEach(b => b.classList.remove('on'));
+    btn.classList.add('on');
+    PORT.sort((a,b) => key === 'sym' ? a.sym.localeCompare(b.sym) : b[key] - a[key]);
+    render();
+}
+
+/* ── Fetch helpers ────────────────────────────────────────────
+   yfetch: ส่งผ่าน local proxy server.py ที่ /api/yf?url=...
+   ไม่มี CORS เพราะ same-origin กับ localhost:7890
+─────────────────────────────────────────────────────────────── */
+async function yfetch(url) {
+    const proxyUrl = '/api/yf?url=' + encodeURIComponent(url);
+    const r = await fetch(proxyUrl);
+    if (!r.ok) throw new Error(`Proxy error: ${r.status}`);
+    const text = await r.text();
+    return JSON.parse(text);
+}
+
+/* currentPrice: ดึงราคา realtime จาก v8/chart (range=1d ไม่ต้อง crumb) */
+async function currentPrice(yqSym) {
+    const j = await yfetch(
+        `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(yqSym)}?interval=1d&range=1d`
+    );
+    return j.chart.result[0].meta.regularMarketPrice;
+}
+
+/* refPrice: ดึงราคา ณ 27 เม.ย. 2026 โดยใช้ range=3mo (เลี่ยง period1/period2 ที่ต้อง crumb)
+   แล้วหา timestamp ที่ใกล้ 27 เม.ย.มากที่สุด */
+async function refPrice(yqSym) {
+    const j = await yfetch(
+        `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(yqSym)}?interval=1d&range=3mo`
+    );
+    const res  = j.chart.result[0];
+    const ts   = res.timestamp;
+    const cl   = res.indicators.quote[0].close;
+
+    let best = null, minDiff = Infinity;
+    ts.forEach((t, i) => {
+        if (cl[i] == null) return;
+        const d = Math.abs(t - REF_TS);
+        if (d < minDiff) { minDiff = d; best = cl[i]; }
+    });
+
+    // ยอมรับถ้าห่างไม่เกิน 7 วัน (รองรับ holiday/weekend)
+    return minDiff <= 7 * 86400 ? best : null;
+}
+
+/* ── Main loader ──────────────────────────────────────────── */
+function clearCache() {
+    localStorage.removeItem(CACHE_KEY);
+    startLoad();
+}
+
+async function startLoad() {
+    const dot = document.getElementById('dot');
+    const ts  = document.getElementById('ts');
+    dot.className = 'dot loading';
+    ts.textContent = 'กำลังโหลดราคา...';
+
+    try {
+        let shares = JSON.parse(localStorage.getItem(CACHE_KEY) || '{}');
+
+        /* ── Step 1: คำนวณ shares จากราคา 27 เม.ย. (เฉพาะตัวที่ยังไม่มี) ── */
+        const missing = PORT.filter(s => shares[s.sym] == null);
+        if (missing.length) {
+            await Promise.all(missing.map(async s => {
+                try {
+                    const p = await refPrice(s.yq);
+                    if (!p) return;
+                    // val อยู่ใน USD เสมอ; HK ต้องแปลงเป็น HKD ก่อน
+                    const valNative = s.cur === 'HKD' ? s.val * 7.8 : s.val;
+                    shares[s.sym] = valNative / p;
+                } catch(e) { console.warn('refPrice failed:', s.sym, e.message); }
+            }));
+            localStorage.setItem(CACHE_KEY, JSON.stringify(shares));
+        }
+
+        /* ── Step 2: ดึงราคาปัจจุบันทุกตัว (parallel) ── */
+        let usdHkd = 7.8;
+        const allFetches = [
+            /* HKD/USD rate */
+            currentPrice('HKD=X').then(p => { if (p) usdHkd = 1 / p; }).catch(() => {}),
+            /* ราคาหุ้นทุกตัว */
+            ...PORT.map(s => currentPrice(s.yq))
+        ];
+        const [, ...results] = await Promise.allSettled(allFetches);
+
+        /* ── Step 3: อัปเดต port ── */
+        let anyPriceSet = false;
+        results.forEach((res, i) => {
+            const s = PORT[i];
+            if (res.status !== 'fulfilled') return;
+
+            const p = res.value;
+            if (!p) return;
+
+            /* ✅ FIX: set s.price ก่อน shares check เสมอ */
+            s.price = p;
+            anyPriceSet = true;
+
+            const n = shares[s.sym];
+            if (n == null) {
+                /* Fallback: คำนวณ shares จากราคาวันนี้ (approximate)
+                   ครั้งหน้าที่เปิดจะ track การเปลี่ยนแปลงได้ถูกต้อง */
+                const valNative = s.cur === 'HKD' ? s.val * (1 / usdHkd) : s.val;
+                shares[s.sym] = valNative / p;
+                return;   // ไม่อัปเดต val รอบนี้ (val ยังคงเป็นค่า snapshot)
+            }
+
+            /* อัปเดต val, pl, pct จากราคาปัจจุบัน */
+            s.val = s.cur === 'HKD' ? (n * p) * usdHkd : n * p;
+            s.pl  = s.val - s.cost;
+            s.pct = (s.pl / s.cost) * 100;
+        });
+
+        /* บันทึก shares ที่เพิ่งคำนวณ (รวม fallback) */
+        localStorage.setItem(CACHE_KEY, JSON.stringify(shares));
+
+        const now = new Date();
+        ts.textContent = 'LIVE · ' + now.toLocaleString('th-TH', {
+            day:'2-digit', month:'short', year:'numeric',
+            hour:'2-digit', minute:'2-digit'
+        });
+        dot.className = anyPriceSet ? 'dot' : 'dot offline';
+        if (!anyPriceSet) ts.textContent = 'ราคา ณ 27 เม.ย. 2569 (ออฟไลน์)';
+
+    } catch(e) {
+        console.error(e);
+        document.getElementById('ts').textContent = 'ราคา ณ 27 เม.ย. 2569 (ออฟไลน์)';
+        document.getElementById('dot').className = 'dot offline';
+    }
+
+    render();
+}
+
+/* ── Boot ── */
+render();
+startLoad();
+</script>
+</body>
+</html>
