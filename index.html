@@ -297,62 +297,55 @@ async function startLoad() {
     const dot = document.getElementById('dot');
     const ts  = document.getElementById('ts');
     dot.className = 'dot loading';
-    ts.textContent = 'กำลังโหลดราคา...';
+
+    const sleep = ms => new Promise(r => setTimeout(r, ms));
 
     try {
         let shares = JSON.parse(localStorage.getItem(CACHE_KEY) || '{}');
 
-        /* ── Step 1: คำนวณ shares จากราคา 27 เม.ย. (เฉพาะตัวที่ยังไม่มี) ── */
+        /* ── Step 1: คำนวณ shares จากราคา 27 เม.ย. ทีละ 3 ตัว ── */
         const missing = PORT.filter(s => shares[s.sym] == null);
-        if (missing.length) {
-            await Promise.all(missing.map(async s => {
+        for (let i = 0; i < missing.length; i += 3) {
+            const batch = missing.slice(i, i + 3);
+            ts.textContent = `คำนวณ shares… ${Math.min(i+3, missing.length)}/${missing.length}`;
+            await Promise.all(batch.map(async s => {
                 try {
                     const p = await refPrice(s.yq);
-                    if (!p) return;
-                    // val อยู่ใน USD เสมอ; HK ต้องแปลงเป็น HKD ก่อน
-                    const valNative = s.cur === 'HKD' ? s.val * 7.8 : s.val;
-                    shares[s.sym] = valNative / p;
-                } catch(e) { console.warn('refPrice failed:', s.sym, e.message); }
+                    if (p) shares[s.sym] = (s.cur === 'HKD' ? s.val * 7.8 : s.val) / p;
+                } catch(e) {}
             }));
-            localStorage.setItem(CACHE_KEY, JSON.stringify(shares));
+            if (i + 3 < missing.length) await sleep(500);
+        }
+        localStorage.setItem(CACHE_KEY, JSON.stringify(shares));
+
+        /* ── Step 2: ราคาปัจจุบัน ทีละ 3 ตัว ── */
+        let usdHkd = 7.8;
+        try { const h = await currentPrice('HKD=X'); if (h) usdHkd = 1 / h; } catch(e) {}
+
+        let done = 0;
+        for (let i = 0; i < PORT.length; i += 3) {
+            const batch = PORT.slice(i, i + 3);
+            ts.textContent = `โหลดราคา… ${Math.min(i+3, PORT.length)}/${PORT.length}`;
+            await Promise.all(batch.map(async s => {
+                try {
+                    const p = await currentPrice(s.yq);
+                    if (!p) return;
+                    s.price = p;
+                    done++;
+                    const n = shares[s.sym];
+                    if (n == null) {
+                        shares[s.sym] = (s.cur === 'HKD' ? s.val * (1 / usdHkd) : s.val) / p;
+                        return;
+                    }
+                    s.val = s.cur === 'HKD' ? (n * p) * usdHkd : n * p;
+                    s.pl  = s.val - s.cost;
+                    s.pct = (s.pl / s.cost) * 100;
+                } catch(e) {}
+            }));
+            render();
+            if (i + 3 < PORT.length) await sleep(400);
         }
 
-        /* ── Step 2: ดึงราคาปัจจุบันทุกตัว (parallel) ── */
-        let usdHkd = 7.8;
-        const allFetches = [
-            /* HKD/USD rate */
-            currentPrice('HKD=X').then(p => { if (p) usdHkd = 1 / p; }).catch(() => {}),
-            /* ราคาหุ้นทุกตัว */
-            ...PORT.map(s => currentPrice(s.yq))
-        ];
-        const [, ...results] = await Promise.allSettled(allFetches);
-
-        /* ── Step 3: อัปเดต port ── */
-        let anyPriceSet = false;
-        results.forEach((res, i) => {
-            const s = PORT[i];
-            if (res.status !== 'fulfilled') return;
-
-            const p = res.value;
-            if (!p) return;
-
-            s.price = p;
-            anyPriceSet = true;
-
-            const n = shares[s.sym];
-            if (n == null) {
-                const valNative = s.cur === 'HKD' ? s.val * (1 / usdHkd) : s.val;
-                shares[s.sym] = valNative / p;
-                return;
-            }
-
-            /* อัปเดต val, pl, pct จากราคาปัจจุบัน */
-            s.val = s.cur === 'HKD' ? (n * p) * usdHkd : n * p;
-            s.pl  = s.val - s.cost;
-            s.pct = (s.pl / s.cost) * 100;
-        });
-
-        /* บันทึก shares ที่เพิ่งคำนวณ (รวม fallback) */
         localStorage.setItem(CACHE_KEY, JSON.stringify(shares));
 
         const now = new Date();
@@ -360,8 +353,8 @@ async function startLoad() {
             day:'2-digit', month:'short', year:'numeric',
             hour:'2-digit', minute:'2-digit'
         });
-        dot.className = anyPriceSet ? 'dot' : 'dot offline';
-        if (!anyPriceSet) ts.textContent = 'ราคา ณ 27 เม.ย. 2569 (ออฟไลน์)';
+        dot.className = done > 0 ? 'dot' : 'dot offline';
+        if (!done) ts.textContent = 'ราคา ณ 27 เม.ย. 2569 (ออฟไลน์)';
 
     } catch(e) {
         console.error(e);
