@@ -251,10 +251,11 @@ function doSort(key, btn) {
 
 /* ── Fetch via corsproxy.io (ใช้งานได้จาก GitHub Pages) ─────── */
 async function yfetch(url) {
-    const proxyUrl = 'https://corsproxy.io/?url=' + encodeURIComponent(url);
+    const proxyUrl = 'https://api.allorigins.win/get?url=' + encodeURIComponent(url);
     const r = await fetch(proxyUrl);
     if (!r.ok) throw new Error(`Proxy error: ${r.status}`);
-    return r.json();
+    const data = await r.json();
+    return JSON.parse(data.contents);
 }
 
 /* currentPrice: ดึงราคา realtime จาก v8/chart (range=1d ไม่ต้อง crumb) */
