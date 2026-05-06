@@ -249,16 +249,12 @@ function doSort(key, btn) {
     render();
 }
 
-/* ── Fetch helpers ────────────────────────────────────────────
-   yfetch: ส่งผ่าน local proxy server.py ที่ /api/yf?url=...
-   ไม่มี CORS เพราะ same-origin กับ localhost:7890
-─────────────────────────────────────────────────────────────── */
+/* ── Fetch via corsproxy.io (ใช้งานได้จาก GitHub Pages) ─────── */
 async function yfetch(url) {
-    const proxyUrl = '/api/yf?url=' + encodeURIComponent(url);
+    const proxyUrl = 'https://corsproxy.io/?url=' + encodeURIComponent(url);
     const r = await fetch(proxyUrl);
     if (!r.ok) throw new Error(`Proxy error: ${r.status}`);
-    const text = await r.text();
-    return JSON.parse(text);
+    return r.json();
 }
 
 /* currentPrice: ดึงราคา realtime จาก v8/chart (range=1d ไม่ต้อง crumb) */
@@ -339,17 +335,14 @@ async function startLoad() {
             const p = res.value;
             if (!p) return;
 
-            /* ✅ FIX: set s.price ก่อน shares check เสมอ */
             s.price = p;
             anyPriceSet = true;
 
             const n = shares[s.sym];
             if (n == null) {
-                /* Fallback: คำนวณ shares จากราคาวันนี้ (approximate)
-                   ครั้งหน้าที่เปิดจะ track การเปลี่ยนแปลงได้ถูกต้อง */
                 const valNative = s.cur === 'HKD' ? s.val * (1 / usdHkd) : s.val;
                 shares[s.sym] = valNative / p;
-                return;   // ไม่อัปเดต val รอบนี้ (val ยังคงเป็นค่า snapshot)
+                return;
             }
 
             /* อัปเดต val, pl, pct จากราคาปัจจุบัน */
