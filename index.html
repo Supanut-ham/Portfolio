@@ -126,13 +126,19 @@
 <script>
 /* ── Portfolio snapshot: 27 Apr 2026 ──────────────────────────
    cost = val − pl  (ทุน คงที่ไม่เปลี่ยน)
-   cur  = สกุลเงินใน Yahoo Finance (USD หรือ HKD)
-   yq   = Yahoo Finance symbol
+   cur  = สกุลเงิน (USD หรือ HKD)
+   yq   = Yahoo symbol (ใช้แปลงเป็น Finnhub)
 ─────────────────────────────────────────────────────────────── */
 const THB       = 35;
-const CACHE_KEY = 'port_v5';
+const CACHE_KEY = 'port_v6';
 let   hidden    = false;
-const REF_TS    = 1777248000;   // 2026-04-27 00:00 UTC (correct)
+const REF_TS    = 1777248000;   // 2026-04-27 00:00 UTC
+const FINN_KEY  = 'd7u22f1r01qvtsq070dgd7u22f1r01qvtsq070e0';
+
+function toFinnhub(yq) {
+    if (yq.endsWith('.HK')) return 'HKEX:' + parseInt(yq, 10);
+    return yq;
+}
 
 let PORT = [
     { broker:'Dime',      sym:'ARM',       yq:'ARM',     cur:'USD', cost:3990.77,  val:6087.74,  pl:2096.97,   pct:52.55  },
@@ -249,55 +255,6 @@ function doSort(key, btn) {
     render();
 }
 
-async function yfetch(url) {
-    const proxyUrl = 'https://api.allorigins.win/get?url=' + encodeURIComponent(url);
-    const r = await fetch(proxyUrl);
-    if (!r.ok) throw new Error(`Proxy error: ${r.status}`);
-    const data = await r.json();
-    return JSON.parse(data.contents);
-}
-
-/* ดึงราคาปัจจุบันทุกตัวใน 1 request */
-async function batchQuote(yqSyms) {
-    const j = await yfetch(
-        'https://query1.finance.yahoo.com/v7/finance/quote?symbols=' +
-        encodeURIComponent(yqSyms.join(','))
-    );
-    const out = {};
-    for (const q of (j.quoteResponse?.result || [])) {
-        out[q.symbol] = q.regularMarketPrice;
-    }
-    return out;
-}
-
-/* currentPrice: ดึงราคา realtime จาก v8/chart (range=1d ไม่ต้อง crumb) */
-async function currentPrice(yqSym) {
-    const j = await yfetch(
-        `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(yqSym)}?interval=1d&range=1d`
-    );
-    return j.chart.result[0].meta.regularMarketPrice;
-}
-
-/* refPrice: ดึงราคา ณ 27 เม.ย. 2026 โดยใช้ range=3mo (เลี่ยง period1/period2 ที่ต้อง crumb)
-   แล้วหา timestamp ที่ใกล้ 27 เม.ย.มากที่สุด */
-async function refPrice(yqSym) {
-    const j = await yfetch(
-        `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(yqSym)}?interval=1d&range=3mo`
-    );
-    const res  = j.chart.result[0];
-    const ts   = res.timestamp;
-    const cl   = res.indicators.quote[0].close;
-
-    let best = null, minDiff = Infinity;
-    ts.forEach((t, i) => {
-        if (cl[i] == null) return;
-        const d = Math.abs(t - REF_TS);
-        if (d < minDiff) { minDiff = d; best = cl[i]; }
-    });
-
-    // ยอมรับถ้าห่างไม่เกิน 7 วัน (รองรับ holiday/weekend)
-    return minDiff <= 7 * 86400 ? best : null;
-}
 
 /* ── Main loader ──────────────────────────────────────────── */
 function clearCache() {
@@ -314,41 +271,61 @@ async function startLoad() {
     try {
         let shares = JSON.parse(localStorage.getItem(CACHE_KEY) || '{}');
 
-        /* ── Step 1: คำนวณ shares ทีละ 1 ตัว 350ms (เฉพาะครั้งแรก แล้ว cache) ── */
+        /* ── Step 1: คำนวณ shares จากราคา 27 เม.ย. 2026 (เฉพาะครั้งแรก แล้ว cache) ── */
         const missing = PORT.filter(s => shares[s.sym] == null);
         for (let i = 0; i < missing.length; i++) {
             const s = missing[i];
             ts.textContent = `คำนวณ shares… ${i+1}/${missing.length}`;
             try {
-                const p = await refPrice(s.yq);
-                if (p) shares[s.sym] = (s.cur === 'HKD' ? s.val * 7.8 : s.val) / p;
-            } catch(e) {}
-            if (i < missing.length - 1) await sleep(350);
+                const fhSym = toFinnhub(s.yq);
+                const r = await fetch(
+                    `https://finnhub.io/api/v1/stock/candle?symbol=${encodeURIComponent(fhSym)}` +
+                    `&resolution=D&from=${REF_TS}&to=${REF_TS + 86400}&token=${FINN_KEY}`
+                );
+                const d = await r.json();
+                if (d.s !== 'no_data' && d.c && d.c.length > 0) {
+                    shares[s.sym] = (s.cur === 'HKD' ? s.val * 7.8 : s.val) / d.c[0];
+                }
+            } catch(e) { console.warn('refPrice error:', s.sym, e); }
+            if (i < missing.length - 1) await sleep(300);
         }
         if (missing.length) localStorage.setItem(CACHE_KEY, JSON.stringify(shares));
 
-        /* ── Step 2: ราคาปัจจุบันทุกตัวใน 1 request ── */
-        ts.textContent = 'โหลดราคาล่าสุด...';
-        let usdHkd = 7.8;
-        const prices = await batchQuote([...PORT.map(s => s.yq), 'HKD=X']);
-        if (prices['HKD=X']) usdHkd = 1 / prices['HKD=X'];
+        /* ── Step 2: อัตราแลกเปลี่ยน HKD/USD ── */
+        let hkdPerUsd = 7.8;
+        try {
+            const r = await fetch(`https://finnhub.io/api/v1/forex/rates?base=USD&token=${FINN_KEY}`);
+            const d = await r.json();
+            if (d.quote && d.quote.HKD) hkdPerUsd = d.quote.HKD;
+        } catch(e) {}
 
-        /* ── Step 3: อัปเดต port ── */
+        /* ── Step 3: ราคาปัจจุบันทีละตัว ── */
+        ts.textContent = 'โหลดราคาล่าสุด...';
         let done = 0;
-        PORT.forEach(s => {
-            const p = prices[s.yq];
-            if (!p) return;
-            s.price = p;
-            done++;
-            const n = shares[s.sym];
-            if (n == null) {
-                shares[s.sym] = (s.cur === 'HKD' ? s.val * (1 / usdHkd) : s.val) / p;
-                return;
-            }
-            s.val = s.cur === 'HKD' ? (n * p) * usdHkd : n * p;
-            s.pl  = s.val - s.cost;
-            s.pct = (s.pl / s.cost) * 100;
-        });
+        for (let i = 0; i < PORT.length; i++) {
+            const s = PORT[i];
+            try {
+                const fhSym = toFinnhub(s.yq);
+                const r = await fetch(
+                    `https://finnhub.io/api/v1/quote?symbol=${encodeURIComponent(fhSym)}&token=${FINN_KEY}`
+                );
+                const d = await r.json();
+                const p = d.c;
+                if (!p) continue;
+                s.price = p;
+                done++;
+                const n = shares[s.sym];
+                if (n == null) {
+                    shares[s.sym] = (s.cur === 'HKD' ? s.val * hkdPerUsd : s.val) / p;
+                } else {
+                    s.val = s.cur === 'HKD' ? (n * p) / hkdPerUsd : n * p;
+                    s.pl  = s.val - s.cost;
+                    s.pct = (s.pl / s.cost) * 100;
+                }
+                ts.textContent = `อัปเดต ${done}/${PORT.length}…`;
+            } catch(e) { console.warn('quote error:', s.sym, e); }
+            if (i < PORT.length - 1) await sleep(200);
+        }
 
         localStorage.setItem(CACHE_KEY, JSON.stringify(shares));
 
