@@ -70,6 +70,7 @@
         tbody tr:hover td { background: var(--surface); }
         td.ar { text-align: right; }
         .sym { font-weight: 600; }
+        .wt  { font-size: 10px; color: var(--dim); font-weight: 400; margin-left: 4px; }
         .bk  { font-size: 10px; color: var(--dim); }
         .sub { font-size: 10px; color: var(--dim); }
         .g   { color: var(--green); }
@@ -204,8 +205,9 @@ function render() {
         const pls    = hidden ? '*****' : (s.pl >= 0 ? '+$' : '-$') + Math.abs(s.pl).toLocaleString(undefined,{maximumFractionDigits:0});
         const plsTHB = hidden ? '*****' : (s.pl >= 0 ? '+฿' : '-฿') + Math.abs(Math.round(s.pl*THB)).toLocaleString('th-TH');
         const ps     = hidden ? '*****' : (s.pct >= 0 ? '+' : '') + s.pct.toFixed(1) + '%';
+        const wt     = hidden ? '' : `<span class="wt">${(s.val/totVal*100).toFixed(1)}%</span>`;
         return `<tr>
-            <td><div class="sym ${g}">${s.sym}</div><div class="bk">${s.broker}</div></td>
+            <td><div class="sym ${g}">${s.sym}${wt}</div><div class="bk">${s.broker}</div></td>
             <td class="ar ${g}">${priceStr}</td>
             <td class="ar ${g}">
                 <div>${valUSD}</div>
