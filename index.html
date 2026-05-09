@@ -75,6 +75,78 @@
         .sub { font-size: 10px; color: var(--dim); }
         .g   { color: var(--green); }
         .r   { color: var(--red); }
+        .dim { color: var(--dim); }
+
+        .hide-row { padding: 8px 12px; border-bottom: 1px solid var(--border); flex-shrink: 0; }
+        .hide-btn {
+            width: 100%; background: none; border: 1px solid var(--border);
+            color: var(--text); font-size: 12px; font-weight: 600; letter-spacing: .12em;
+            padding: 9px 16px; border-radius: 6px; cursor: pointer; font-family: inherit;
+            text-transform: uppercase;
+        }
+        .hide-btn:hover { border-color: var(--dim); background: var(--surface); }
+        .hide-btn:active { background: var(--border); }
+
+        /* ── Mobile-only details row (hidden by default) ── */
+        .row-details { display: none; }
+
+        /* ── Responsive: phone layout (≤768px) ── */
+        @media (max-width: 768px) {
+            /* Stack chart + table แทนที่จะเรียงซ้าย-ขวา */
+            .body { flex-direction: column; }
+            .chart-side {
+                flex: 0 0 auto;
+                min-height: 220px; height: 36vh; max-height: 300px;
+                border-right: none; border-bottom: 1px solid var(--border);
+                padding: 10px 8px;
+            }
+            .table-side { flex: 1 1 auto; min-height: 0; }
+
+            /* ซ่อน column และปุ่มที่ไม่จำเป็นบนมือถือ */
+            .col-mobile-hide { display: none !important; }
+            .sb-az { display: none; }
+
+            /* Metric ด้านบนกระชับขึ้น */
+            .metric { padding: 10px 12px; }
+            .metric-value { font-size: 17px; }
+            .metric-label { font-size: 9px; }
+
+            /* Touch target ใหญ่ขึ้น */
+            tbody td { padding: 9px 10px; }
+            .sb { padding: 5px 11px; font-size: 11px; }
+
+            /* ลูกศรชี้ว่าแถวกดได้ */
+            tbody tr.row-main { cursor: pointer; }
+            tbody tr.row-main .sym::before {
+                content: '▸'; color: var(--dim); margin-right: 6px;
+                font-size: 10px; display: inline-block;
+                transition: transform 0.15s ease;
+            }
+            tbody tr.row-main.expanded .sym::before { transform: rotate(90deg); }
+
+            /* แถวรายละเอียดที่ขยายออก */
+            .row-details.expanded { display: table-row; }
+            .row-details td {
+                background: var(--surface);
+                padding: 12px 14px;
+                border-bottom: 1px solid var(--border);
+            }
+            .details-grid {
+                display: grid;
+                grid-template-columns: 1fr 1fr;
+                gap: 10px 18px;
+            }
+            .details-item .label {
+                font-size: 9px; color: var(--dim);
+                text-transform: uppercase; letter-spacing: .1em;
+                margin-bottom: 4px;
+            }
+            .details-item .val {
+                font-size: 13px;
+                font-variant-numeric: tabular-nums;
+            }
+            .details-item .val .sub { font-size: 10px; margin-top: 2px; }
+        }
     </style>
 </head>
 <body>
@@ -86,7 +158,6 @@
         <span id="ts">กำลังโหลด...</span>
         <button class="btn" onclick="startLoad()">↻</button>
         <button class="btn" onclick="clearCache()" title="รีเซ็ต cache หุ้น">✕ cache</button>
-        <button class="btn" id="hideBtn" onclick="toggleHide()">hide</button>
     </div>
 </header>
 
@@ -101,21 +172,24 @@
         <div class="chart-wrap"><canvas id="chart"></canvas></div>
     </div>
     <div class="table-side">
+        <div class="hide-row">
+            <button class="hide-btn" id="hideBtn" onclick="toggleHide()">Hide Numbers</button>
+        </div>
         <div class="toolbar">
             <span class="toolbar-label">HOLDINGS</span>
             <div class="sort-group">
                 <button class="sb on" onclick="doSort('val',this)">SIZE</button>
                 <button class="sb"    onclick="doSort('pct',this)">GAIN%</button>
-                <button class="sb"    onclick="doSort('sym',this)">A–Z</button>
+                <button class="sb sb-az" onclick="doSort('sym',this)">A–Z</button>
             </div>
         </div>
         <div class="tscroll">
             <table>
                 <thead><tr>
                     <th>SYMBOL</th>
-                    <th class="ar">PRICE <span class="sub">(COST)</span></th>
+                    <th class="ar col-mobile-hide">PRICE <span class="sub">(COST)</span></th>
                     <th class="ar">VALUE</th>
-                    <th class="ar">P/L</th>
+                    <th class="ar col-mobile-hide">P/L</th>
                     <th class="ar">%</th>
                 </tr></thead>
                 <tbody id="tbody"></tbody>
@@ -194,7 +268,7 @@ const COLOR_MAP = {
 /* ── Hide toggle ── */
 function toggleHide() {
     hidden = !hidden;
-    document.getElementById('hideBtn').textContent = hidden ? 'show' : 'hide';
+    document.getElementById('hideBtn').textContent = hidden ? 'Show Numbers' : 'Hide Numbers';
     render();
 }
 const M = v => hidden ? '*****' : v;
@@ -212,14 +286,14 @@ function render() {
     const plEl = document.getElementById('mPL');
     plEl.textContent = hidden ? '*****' : (totPL >= 0 ? '+฿' : '-฿') +
         Math.abs(Math.round(totPL * THB)).toLocaleString('th-TH');
-    plEl.className = 'metric-value ' + (totPL >= 0 ? 'g' : 'r');
+    plEl.className = 'metric-value ' + (hidden ? 'dim' : (totPL >= 0 ? 'g' : 'r'));
 
     const roiEl = document.getElementById('mROI');
     roiEl.textContent = hidden ? '*****' : (roi >= 0 ? '+' : '') + roi + '%';
-    roiEl.className = 'metric-value ' + (roi >= 0 ? 'g' : 'r');
+    roiEl.className = 'metric-value ' + (hidden ? 'dim' : (roi >= 0 ? 'g' : 'r'));
 
     document.getElementById('tbody').innerHTML = PORT.map(s => {
-        const g   = s.pl >= 0 ? 'g' : 'r';
+        const g   = hidden ? 'dim' : (s.pl >= 0 ? 'g' : 'r');
         const cur = s.cur === 'HKD' ? 'HK$' : '$';
         const avgCost  = (s.shares && s.cur === 'USD') ? s.cost / s.shares : null;
         const avgStr   = avgCost != null
@@ -234,18 +308,32 @@ function render() {
         const plsTHB = hidden ? '*****' : (s.pl >= 0 ? '+฿' : '-฿') + Math.abs(Math.round(s.pl*THB)).toLocaleString('th-TH');
         const ps     = hidden ? '*****' : (s.pct >= 0 ? '+' : '') + s.pct.toFixed(1) + '%';
         const wt     = hidden ? '' : `<span class="wt">${(s.val/totVal*100).toFixed(1)}%</span>`;
-        return `<tr>
+        return `<tr class="row-main" data-sym="${s.sym}" onclick="toggleDetails('${s.sym}')">
             <td><div class="sym ${g}">${s.sym}${wt}</div><div class="bk">${s.broker}</div></td>
-            <td class="ar ${g}">${priceStr}</td>
+            <td class="ar ${g} col-mobile-hide">${priceStr}</td>
             <td class="ar ${g}">
                 <div>${valUSD}</div>
                 <div class="sub">${valTHB}</div>
             </td>
-            <td class="ar ${g}">
+            <td class="ar ${g} col-mobile-hide">
                 <div>${pls}</div>
                 <div class="sub">${plsTHB}</div>
             </td>
             <td class="ar ${g}"><b>${ps}</b></td>
+        </tr>
+        <tr class="row-details" data-sym="${s.sym}">
+            <td colspan="5">
+                <div class="details-grid">
+                    <div class="details-item">
+                        <div class="label">Price (Cost)</div>
+                        <div class="val ${g}">${priceStr}</div>
+                    </div>
+                    <div class="details-item">
+                        <div class="label">P/L</div>
+                        <div class="val ${g}">${pls}<div class="sub">${plsTHB}</div></div>
+                    </div>
+                </div>
+            </td>
         </tr>`;
     }).join('');
 
@@ -283,6 +371,12 @@ function doSort(key, btn) {
     btn.classList.add('on');
     PORT.sort((a,b) => key === 'sym' ? a.sym.localeCompare(b.sym) : b[key] - a[key]);
     render();
+}
+
+/* ── Tap-to-expand row (mobile only) ── */
+function toggleDetails(sym) {
+    if (window.innerWidth > 768) return;
+    document.querySelectorAll(`tr[data-sym="${sym}"]`).forEach(r => r.classList.toggle('expanded'));
 }
 
 
@@ -380,6 +474,7 @@ async function startLoad() {
 }
 
 /* ── Boot ── */
+PORT.sort((a,b) => b.val - a.val);   // เรียงตาม SIZE เป็นค่าเริ่มต้น
 render();
 startLoad();
 </script>
