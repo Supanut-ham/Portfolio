@@ -109,14 +109,12 @@
             .body { flex-direction: column; }
             .chart-side {
                 flex: 0 0 auto;
-                min-height: 460px; height: auto; max-height: none;
+                min-height: 220px; height: 36vh; max-height: 300px;
                 border-right: none; border-bottom: 1px solid var(--border);
                 padding: 10px 8px;
             }
-            .chart-wrap { min-height: 220px; height: 30vh; max-height: 280px; flex: none; }
-            .perf-section { min-height: 220px; }
-            .perf-chart-wrap { min-height: 130px; }
-            .perf-badge .pvalue { font-size: 12px; }
+            /* ซ่อน Performance vs Market บนมือถือ — ดูได้บนคอม */
+            .perf-section { display: none; }
             .table-side { flex: 1 1 auto; min-height: 0; }
 
             /* ซ่อน column และปุ่มที่ไม่จำเป็นบนมือถือ */
@@ -730,7 +728,10 @@ function renderPerformance(data) {
 /* ── Boot ── */
 PORT.sort((a,b) => b.val - a.val);   // เรียงตาม SIZE เป็นค่าเริ่มต้น
 render();
-startLoad().then(() => loadPerformance());
+startLoad().then(() => {
+    /* Skip Performance chart on mobile (hidden by CSS, no need to fetch ~20 candles) */
+    if (window.innerWidth > 768) loadPerformance();
+});
 </script>
 </body>
 </html>
