@@ -48,8 +48,21 @@
         .metric-value { font-size: 22px; font-weight: 700; letter-spacing: -.03em; font-variant-numeric: tabular-nums; }
 
         .body { display: flex; flex: 1; min-height: 0; }
-        .chart-side { flex: 1; padding: 14px 12px; border-right: 1px solid var(--border); display: flex; flex-direction: column; }
-        .chart-wrap { flex: 1; position: relative; min-height: 0; }
+        .chart-side { flex: 1; padding: 14px 12px; border-right: 1px solid var(--border); display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+        .chart-wrap { flex: 1.3; position: relative; min-height: 0; }
+
+        /* ── Performance comparison section ── */
+        .perf-section { flex: 1; display: flex; flex-direction: column; border-top: 1px solid var(--border); padding-top: 10px; min-height: 0; }
+        .perf-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+        .perf-title { font-size: 10px; font-weight: 600; color: var(--dim); letter-spacing: .08em; text-transform: uppercase; }
+        .perf-period { font-size: 9px; color: var(--dim); }
+        .perf-badges { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-bottom: 8px; }
+        .perf-badge { padding: 6px 8px; background: var(--surface); border-radius: 4px; border: 1px solid var(--border); }
+        .perf-badge .plabel { font-size: 9px; color: var(--dim); text-transform: uppercase; letter-spacing: .04em; display: flex; align-items: center; gap: 4px; }
+        .perf-badge .pdot { width: 8px; height: 2px; display: inline-block; }
+        .perf-badge .pvalue { font-size: 13px; font-weight: 700; font-variant-numeric: tabular-nums; margin-top: 2px; }
+        .perf-chart-wrap { flex: 1; position: relative; min-height: 80px; }
+        .perf-disclaim { font-size: 9px; color: var(--dim); margin-top: 6px; font-style: italic; line-height: 1.4; }
         .table-side { flex: 1; display: flex; flex-direction: column; min-width: 0; }
         .toolbar { display: flex; align-items: center; justify-content: space-between; padding: 6px 12px; border-bottom: 1px solid var(--border); flex-shrink: 0; }
         .toolbar-label { font-size: 10px; color: var(--dim); font-weight: 600; letter-spacing: .08em; }
@@ -96,10 +109,14 @@
             .body { flex-direction: column; }
             .chart-side {
                 flex: 0 0 auto;
-                min-height: 220px; height: 36vh; max-height: 300px;
+                min-height: 460px; height: auto; max-height: none;
                 border-right: none; border-bottom: 1px solid var(--border);
                 padding: 10px 8px;
             }
+            .chart-wrap { min-height: 220px; height: 30vh; max-height: 280px; flex: none; }
+            .perf-section { min-height: 220px; }
+            .perf-chart-wrap { min-height: 130px; }
+            .perf-badge .pvalue { font-size: 12px; }
             .table-side { flex: 1 1 auto; min-height: 0; }
 
             /* ซ่อน column และปุ่มที่ไม่จำเป็นบนมือถือ */
@@ -170,6 +187,30 @@
 <div class="body">
     <div class="chart-side">
         <div class="chart-wrap"><canvas id="chart"></canvas></div>
+        <div class="perf-section">
+            <div class="perf-header">
+                <span class="perf-title">vs Market</span>
+                <span class="perf-period" id="perfPeriod">Since 18 Sep 2025</span>
+            </div>
+            <div class="perf-badges">
+                <div class="perf-badge">
+                    <div class="plabel"><span class="pdot" style="background:#58a6ff"></span>Portfolio</div>
+                    <div class="pvalue dim" id="perfPort">—</div>
+                </div>
+                <div class="perf-badge">
+                    <div class="plabel"><span class="pdot" style="background:#8b949e"></span>VOO (S&P 500)</div>
+                    <div class="pvalue dim" id="perfVOO">—</div>
+                </div>
+                <div class="perf-badge">
+                    <div class="plabel"><span class="pdot" style="background:#e3b341"></span>QQQ (NASDAQ-100)</div>
+                    <div class="pvalue dim" id="perfQQQ">—</div>
+                </div>
+            </div>
+            <div class="perf-chart-wrap"><canvas id="perfChart"></canvas></div>
+            <div class="perf-disclaim" id="perfDisclaim">
+                * คำนวณจากการสมมติว่าถือหุ้นในพอร์ตปัจจุบัน (shares ปัจจุบัน) ตั้งแต่ 18 ก.ย. 2568
+            </div>
+        </div>
     </div>
     <div class="table-side">
         <div class="hide-row">
@@ -473,10 +514,223 @@ async function startLoad() {
     render();
 }
 
+/* ── Performance vs Market (Since 18 Sep 2025) ──────────────── */
+const PERF_BASELINE_TS = Math.floor(new Date('2025-09-18T00:00:00Z').getTime() / 1000);
+const PERF_CACHE_KEY   = 'perf_v2';
+const PERF_CACHE_TTL   = 3600 * 1000;   // 1 hour
+const YAHOO_PROXY      = 'https://yahoo-proxy.supanut12w.workers.dev/?url=';
+let perfChartInst = null;
+
+async function fetchYahooCandle(yqSym, fromTs, toTs) {
+    /* Yahoo accepts US tickers (NVDA) and HK (9988.HK) directly */
+    const yahooUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(yqSym)}?period1=${fromTs}&period2=${toTs}&interval=1d`;
+    try {
+        const r = await fetch(YAHOO_PROXY + encodeURIComponent(yahooUrl));
+        const d = await r.json();
+        const result = d?.chart?.result?.[0];
+        if (!result?.timestamp || !result?.indicators?.quote?.[0]?.close) return null;
+        const times = result.timestamp;
+        const closes = result.indicators.quote[0].close;
+        /* Filter out null closes (Yahoo sometimes returns nulls for half days) */
+        const cleaned = times.map((t, i) => [t, closes[i]]).filter(([, c]) => c != null);
+        if (cleaned.length === 0) return null;
+        return {
+            times:  cleaned.map(([t]) => t),
+            prices: cleaned.map(([, c]) => c),
+        };
+    } catch (e) {
+        console.warn('Yahoo candle error:', yqSym, e.message);
+        return null;
+    }
+}
+
+async function loadPerformance() {
+    /* Try cache first */
+    const cached = JSON.parse(localStorage.getItem(PERF_CACHE_KEY) || 'null');
+    if (cached && Date.now() - cached.fetchedAt < PERF_CACHE_TTL) {
+        renderPerformance(cached.data);
+        return;
+    }
+
+    const today = Math.floor(Date.now() / 1000);
+    const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+    /* Fetch candles for all PORT stocks + benchmarks */
+    const targets = [
+        ...PORT.map(s => ({ sym: s.sym, yq: s.yq })),
+        { sym: 'VOO', yq: 'VOO' },
+        { sym: 'QQQ', yq: 'QQQ' },
+    ];
+    const candles = {};
+    for (let i = 0; i < targets.length; i++) {
+        candles[targets[i].sym] = await fetchYahooCandle(targets[i].yq, PERF_BASELINE_TS, today);
+        if (i < targets.length - 1) await sleep(150);
+    }
+
+    if (!candles['VOO'] || !candles['QQQ']) {
+        document.getElementById('perfDisclaim').textContent =
+            '⚠️ โหลดข้อมูล benchmark ไม่สำเร็จ — กรุณารีเฟรชใหม่';
+        return;
+    }
+
+    /* Per-symbol price maps */
+    const priceMaps = {};
+    for (const sym in candles) {
+        if (!candles[sym]) continue;
+        priceMaps[sym] = {};
+        candles[sym].times.forEach((t, i) => { priceMaps[sym][t] = candles[sym].prices[i]; });
+    }
+
+    const vooMap = priceMaps['VOO'];
+    const qqqMap = priceMaps['QQQ'];
+
+    /* Compute shares for each PORT stock if not hardcoded.
+       For US: shares = val / price_at_baseline (using current val as proxy is wrong → use cost basis)
+       For HK: shares = (val_HKD) / price_HKD_at_baseline
+       The cleanest approach: if shares missing, derive from val_today_in_HKD/USD ÷ first available price. */
+    const hkdPerUsd = 7.8;
+    const sharesMap = {};
+    for (const s of PORT) {
+        if (s.shares != null) {
+            sharesMap[s.sym] = s.shares;
+            continue;
+        }
+        /* Derive HK shares: use val (which is HKD) ÷ price ที่วันใกล้สุดที่มี */
+        const candle = candles[s.sym];
+        if (candle && candle.prices.length > 0) {
+            /* Use last available price as approximation (so shares × last_price ≈ s.val) */
+            const lastPrice = candle.prices[candle.prices.length - 1];
+            sharesMap[s.sym] = s.val / lastPrice;  // HKD / HKD = shares
+        }
+    }
+
+    /* Build portfolio time-series using VOO trading days as backbone */
+    const benchTimes = candles['VOO'].times.slice().sort((a,b) => a-b);
+    const validTimes = [];
+    const portValues = [];
+    const vooValues  = [];
+    const qqqValues  = [];
+    const skippedSyms = new Set();
+
+    for (const t of benchTimes) {
+        let pv = 0;
+        let allOk = true;
+        for (const s of PORT) {
+            const shr = sharesMap[s.sym];
+            if (shr == null) { skippedSyms.add(s.sym); continue; }
+            const p = priceMaps[s.sym]?.[t];
+            if (p == null) {
+                /* Find nearest preceding day for this symbol (HK off-day fallback) */
+                const candle = candles[s.sym];
+                if (!candle) { skippedSyms.add(s.sym); continue; }
+                let prevPrice = null;
+                for (let i = candle.times.length - 1; i >= 0; i--) {
+                    if (candle.times[i] <= t) { prevPrice = candle.prices[i]; break; }
+                }
+                if (prevPrice == null) { allOk = false; break; }
+                pv += s.cur === 'HKD' ? (shr * prevPrice) / hkdPerUsd : shr * prevPrice;
+                continue;
+            }
+            pv += s.cur === 'HKD' ? (shr * p) / hkdPerUsd : shr * p;
+        }
+        if (allOk && pv > 0 && vooMap[t] != null && qqqMap[t] != null) {
+            validTimes.push(t);
+            portValues.push(pv);
+            vooValues.push(vooMap[t]);
+            qqqValues.push(qqqMap[t]);
+        }
+    }
+
+    if (validTimes.length === 0) {
+        document.getElementById('perfDisclaim').textContent =
+            '⚠️ ไม่สามารถคำนวณ portfolio time-series ได้ (data ไม่ครบ)';
+        return;
+    }
+
+    const portBase = portValues[0];
+    const vooBase  = vooValues[0];
+    const qqqBase  = qqqValues[0];
+
+    const data = {
+        times:     validTimes,
+        portfolio: portValues.map(v => (v / portBase - 1) * 100),
+        voo:       vooValues.map(v => (v / vooBase - 1) * 100),
+        qqq:       qqqValues.map(v => (v / qqqBase - 1) * 100),
+        skipped:   [...skippedSyms],
+    };
+
+    localStorage.setItem(PERF_CACHE_KEY, JSON.stringify({ fetchedAt: Date.now(), data }));
+    renderPerformance(data);
+}
+
+function renderPerformance(data) {
+    if (!data || !data.times || data.times.length === 0) return;
+
+    const last = arr => arr[arr.length - 1];
+    const lp = last(data.portfolio), lv = last(data.voo), lq = last(data.qqq);
+    const fmt = v => (v >= 0 ? '+' : '') + v.toFixed(1) + '%';
+    const cls = v => v >= 0 ? 'g' : 'r';
+
+    const setBadge = (id, v) => {
+        const el = document.getElementById(id);
+        el.textContent = fmt(v);
+        el.className = 'pvalue ' + cls(v);
+    };
+    setBadge('perfPort', lp);
+    setBadge('perfVOO',  lv);
+    setBadge('perfQQQ',  lq);
+
+    /* Disclaim */
+    const skipped = data.skipped || [];
+    const skipNote = skipped.length > 0 ? ' · ไม่รวม: ' + skipped.join(', ') : '';
+    document.getElementById('perfDisclaim').innerHTML =
+        '* ดูคร่าวๆ เทียบ benchmark ตั้งแต่ 18 ก.ย. 2568 · สมมติถือ shares ปัจจุบันตลอด period (ตัวเลขจะเพี้ยนเมื่อซื้อ/ขายหุ้นเพิ่ม)' + skipNote;
+
+    const labels = data.times.map(t => {
+        const d = new Date(t * 1000);
+        return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    });
+
+    if (perfChartInst) perfChartInst.destroy();
+    perfChartInst = new Chart(document.getElementById('perfChart'), {
+        type: 'line',
+        data: {
+            labels,
+            datasets: [
+                { label: 'Portfolio', data: data.portfolio, borderColor: '#58a6ff', backgroundColor: 'rgba(88,166,255,0.08)', borderWidth: 2.2, pointRadius: 0, pointHoverRadius: 4, tension: 0.25, fill: true, order: 1 },
+                { label: 'VOO',       data: data.voo,       borderColor: '#8b949e', backgroundColor: 'transparent',           borderWidth: 1.4, pointRadius: 0, pointHoverRadius: 3, tension: 0.25, borderDash: [5,3], order: 2 },
+                { label: 'QQQ',       data: data.qqq,       borderColor: '#e3b341', backgroundColor: 'transparent',           borderWidth: 1.4, pointRadius: 0, pointHoverRadius: 3, tension: 0.25, borderDash: [5,3], order: 3 },
+            ]
+        },
+        options: {
+            responsive: true, maintainAspectRatio: false,
+            interaction: { mode: 'index', intersect: false },
+            plugins: {
+                legend: { display: false },
+                datalabels: { display: false },
+                tooltip: {
+                    backgroundColor: '#161b22',
+                    borderColor: '#30363d',
+                    borderWidth: 1,
+                    titleColor: '#c9d1d9',
+                    bodyColor: '#c9d1d9',
+                    callbacks: {
+                        label: ctx => `${ctx.dataset.label}: ${ctx.parsed.y >= 0 ? '+' : ''}${ctx.parsed.y.toFixed(2)}%`,
+                    },
+                },
+            },
+            scales: {
+                x: { ticks: { color: '#8b949e', font: { size: 9 }, maxTicksLimit: 6, maxRotation: 0, autoSkip: true }, grid: { color: '#1c2128', drawTicks: false } },
+                y: { ticks: { color: '#8b949e', font: { size: 9 }, callback: v => (v >= 0 ? '+' : '') + v + '%' }, grid: { color: '#1c2128', drawTicks: false } },
+            },
+        },
+    });
+}
+
 /* ── Boot ── */
 PORT.sort((a,b) => b.val - a.val);   // เรียงตาม SIZE เป็นค่าเริ่มต้น
 render();
-startLoad();
+startLoad().then(() => loadPerformance());
 </script>
 </body>
 </html>
