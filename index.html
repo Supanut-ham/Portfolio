@@ -255,6 +255,24 @@ function toFinnhub(yq) {
     return yq;
 }
 
+const YAHOO_PROXY = 'https://yahoo-proxy.supanut12w.workers.dev/?url=';
+
+async function yahooQuote(yq) {
+    const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(yq)}?range=1d&interval=1d`;
+    const r = await fetch(YAHOO_PROXY + encodeURIComponent(url));
+    const d = await r.json();
+    return d?.chart?.result?.[0]?.meta?.regularMarketPrice ?? null;
+}
+
+async function yahooHistorical(yq, fromTs, toTs) {
+    /* Pad +3 days in case the ref date falls on a market holiday */
+    const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(yq)}?period1=${fromTs}&period2=${toTs + 86400 * 3}&interval=1d`;
+    const r = await fetch(YAHOO_PROXY + encodeURIComponent(url));
+    const d = await r.json();
+    const closes = d?.chart?.result?.[0]?.indicators?.quote?.[0]?.close;
+    return closes?.find(c => c != null) ?? null;
+}
+
 let PORT = [
     { broker:'Dime',      sym:'ARM',       yq:'ARM',     cur:'USD', cost:3990.77,  val:5529.29,  pl:1538.52,   pct:38.55,  shares:25.9262,  price:213.27 },
     { broker:'Dime',      sym:'CRWD',      yq:'CRWD',    cur:'USD', cost:4687.22,  val:5195.51,  pl:508.29,    pct:10.84,  shares:9.8443,   price:527.77 },
@@ -443,14 +461,20 @@ async function startLoad() {
             const s = missing[i];
             ts.textContent = `คำนวณ shares… ${i+1}/${missing.length}`;
             try {
-                const fhSym = toFinnhub(s.yq);
-                const r = await fetch(
-                    `https://finnhub.io/api/v1/stock/candle?symbol=${encodeURIComponent(fhSym)}` +
-                    `&resolution=D&from=${REF_TS}&to=${REF_TS + 86400}&token=${FINN_KEY}`
-                );
-                const d = await r.json();
-                if (d.s !== 'no_data' && d.c && d.c.length > 0) {
-                    shares[s.sym] = (s.cur === 'HKD' ? s.val * 7.8 : s.val) / d.c[0];
+                let refPrice = null;
+                if (s.yq.endsWith('.HK')) {
+                    refPrice = await yahooHistorical(s.yq, REF_TS, REF_TS + 86400);
+                } else {
+                    const fhSym = toFinnhub(s.yq);
+                    const r = await fetch(
+                        `https://finnhub.io/api/v1/stock/candle?symbol=${encodeURIComponent(fhSym)}` +
+                        `&resolution=D&from=${REF_TS}&to=${REF_TS + 86400}&token=${FINN_KEY}`
+                    );
+                    const d = await r.json();
+                    if (d.s !== 'no_data' && d.c && d.c.length > 0) refPrice = d.c[0];
+                }
+                if (refPrice) {
+                    shares[s.sym] = (s.cur === 'HKD' ? s.val * 7.8 : s.val) / refPrice;
                 }
             } catch(e) { console.warn('refPrice error:', s.sym, e); }
             if (i < missing.length - 1) await sleep(300);
@@ -465,18 +489,23 @@ async function startLoad() {
             if (d.quote && d.quote.HKD) hkdPerUsd = d.quote.HKD;
         } catch(e) {}
 
-        /* ── Step 3: ราคาปัจจุบันทีละตัว ── */
+        /* ── Step 3: ราคาปัจจุบันทีละตัว — HK ใช้ Yahoo, US ใช้ Finnhub ── */
         ts.textContent = 'โหลดราคาล่าสุด...';
         let done = 0;
         for (let i = 0; i < PORT.length; i++) {
             const s = PORT[i];
             try {
-                const fhSym = toFinnhub(s.yq);
-                const r = await fetch(
-                    `https://finnhub.io/api/v1/quote?symbol=${encodeURIComponent(fhSym)}&token=${FINN_KEY}`
-                );
-                const d = await r.json();
-                const p = d.c;
+                let p = null;
+                if (s.yq.endsWith('.HK')) {
+                    p = await yahooQuote(s.yq);
+                } else {
+                    const fhSym = toFinnhub(s.yq);
+                    const r = await fetch(
+                        `https://finnhub.io/api/v1/quote?symbol=${encodeURIComponent(fhSym)}&token=${FINN_KEY}`
+                    );
+                    const d = await r.json();
+                    p = d.c;
+                }
                 if (!p) continue;
                 s.price = p;
                 done++;
@@ -516,7 +545,6 @@ async function startLoad() {
 const PERF_BASELINE_TS = Math.floor(new Date('2025-09-18T00:00:00Z').getTime() / 1000);
 const PERF_CACHE_KEY   = 'perf_v2';
 const PERF_CACHE_TTL   = 3600 * 1000;   // 1 hour
-const YAHOO_PROXY      = 'https://yahoo-proxy.supanut12w.workers.dev/?url=';
 let perfChartInst = null;
 
 async function fetchYahooCandle(yqSym, fromTs, toTs) {
