@@ -46,6 +46,7 @@
         .metric:last-child { border-right: none; }
         .metric-label { font-size: 10px; color: var(--dim); text-transform: uppercase; letter-spacing: .08em; margin-bottom: 5px; }
         .metric-value { font-size: 22px; font-weight: 700; letter-spacing: -.03em; font-variant-numeric: tabular-nums; }
+        .metric-sub { font-size: 11px; color: var(--dim); font-weight: 500; margin-top: 2px; letter-spacing: -.01em; font-variant-numeric: tabular-nums; }
 
         .body { display: flex; flex: 1; min-height: 0; }
         .chart-side { flex: 1; padding: 14px 12px; border-right: 1px solid var(--border); display: flex; flex-direction: column; gap: 12px; min-width: 0; }
@@ -177,9 +178,9 @@
 </header>
 
 <div class="metrics">
-    <div class="metric"><div class="metric-label">Total Value</div><div class="metric-value" id="mVal">—</div></div>
-    <div class="metric"><div class="metric-label">Unrealized P/L</div><div class="metric-value" id="mPL">—</div></div>
-    <div class="metric"><div class="metric-label">ROI</div><div class="metric-value" id="mROI">—</div></div>
+    <div class="metric"><div class="metric-label">Total Value</div><div class="metric-value" id="mVal">—</div><div class="metric-sub" id="mValUsd">—</div></div>
+    <div class="metric"><div class="metric-label">Unrealized P/L</div><div class="metric-value" id="mPL">—</div><div class="metric-sub" id="mPLUsd">—</div></div>
+    <div class="metric"><div class="metric-label">ROI</div><div class="metric-value" id="mROI">—</div><div class="metric-sub" id="mROIUsd">&nbsp;</div></div>
 </div>
 
 <div class="body">
@@ -339,11 +340,17 @@ function render() {
 
     document.getElementById('mVal').textContent =
         hidden ? '*****' : '฿' + Math.round(totVal * THB).toLocaleString('th-TH');
+    document.getElementById('mValUsd').textContent =
+        hidden ? '*****' : '$' + Math.round(totVal).toLocaleString('en-US');
 
     const plEl = document.getElementById('mPL');
     plEl.textContent = hidden ? '*****' : (totPL >= 0 ? '+฿' : '-฿') +
         Math.abs(Math.round(totPL * THB)).toLocaleString('th-TH');
     plEl.className = 'metric-value ' + (hidden ? 'dim' : (totPL >= 0 ? 'g' : 'r'));
+    const plUsdEl = document.getElementById('mPLUsd');
+    plUsdEl.textContent = hidden ? '*****' : (totPL >= 0 ? '+$' : '-$') +
+        Math.abs(Math.round(totPL)).toLocaleString('en-US');
+    plUsdEl.className = 'metric-sub ' + (hidden ? '' : (totPL >= 0 ? 'g' : 'r'));
 
     const roiEl = document.getElementById('mROI');
     roiEl.textContent = hidden ? '*****' : (roi >= 0 ? '+' : '') + roi + '%';
