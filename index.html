@@ -64,6 +64,47 @@
         .perf-badge .pvalue { font-size: 13px; font-weight: 700; font-variant-numeric: tabular-nums; margin-top: 2px; }
         .perf-chart-wrap { flex: 1; position: relative; min-height: 80px; }
         .perf-disclaim { font-size: 9px; color: var(--dim); margin-top: 6px; font-style: italic; line-height: 1.4; }
+
+        /* ── Hedge Book section (compact) ── */
+        .hedge-section {
+            border-top: 1px solid var(--border);
+            padding: 8px 2px 0;
+            flex-shrink: 0;
+        }
+        .hedge-card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 5px;
+            padding: 7px 10px;
+            font-variant-numeric: tabular-nums;
+        }
+        .hedge-row1 {
+            display: flex; align-items: center; justify-content: space-between;
+            margin-bottom: 4px;
+        }
+        .hedge-row1 .hsym {
+            font-size: 11px; font-weight: 600; color: var(--text);
+        }
+        .hedge-row1 .hsym .hsub { color: var(--dim); font-weight: 400; margin-left: 4px; }
+        .hedge-badge {
+            font-size: 9px; padding: 2px 7px; border-radius: 3px;
+            font-weight: 700; letter-spacing: .04em; white-space: nowrap;
+        }
+        .hedge-badge.safe   { background: rgba(63,185,80,.15);  color: var(--green); }
+        .hedge-badge.warn   { background: rgba(227,179,65,.15); color: #e3b341; }
+        .hedge-badge.near   { background: rgba(255,140,0,.20);  color: #ff8c00; }
+        .hedge-badge.itm    { background: rgba(248,81,73,.20);  color: var(--red); }
+
+        .hedge-row2 {
+            display: flex; align-items: center; gap: 12px;
+            font-size: 11px; flex-wrap: wrap;
+        }
+        .hedge-row2 > span { color: var(--dim); }
+        .hedge-row2 b { font-weight: 600; }
+        .hedge-row2 .hpl.g { color: var(--green); }
+        .hedge-row2 .hpl.r { color: var(--red); }
+        .hedge-row2 .hpl.dim { color: var(--dim); }
+
         .table-side { flex: 1; display: flex; flex-direction: column; min-width: 0; }
         .toolbar { display: flex; align-items: center; justify-content: space-between; padding: 6px 12px; border-bottom: 1px solid var(--border); flex-shrink: 0; }
         .toolbar-label { font-size: 10px; color: var(--dim); font-weight: 600; letter-spacing: .08em; }
@@ -116,6 +157,9 @@
             }
             /* ซ่อน Performance vs Market บนมือถือ — ดูได้บนคอม */
             .perf-section { display: none; }
+            /* Hedge section — โชว์บนมือถือด้วย (สำคัญ) */
+            .hedge-section { padding: 6px 8px 0; }
+            .hedge-row2 { font-size: 10.5px; gap: 8px; }
             .table-side { flex: 1 1 auto; min-height: 0; }
 
             /* ซ่อน column และปุ่มที่ไม่จำเป็นบนมือถือ */
@@ -186,6 +230,7 @@
 <div class="body">
     <div class="chart-side">
         <div class="chart-wrap"><canvas id="chart"></canvas></div>
+
         <div class="perf-section">
             <div class="perf-header">
                 <span class="perf-title">vs Market</span>
@@ -208,6 +253,20 @@
             <div class="perf-chart-wrap"><canvas id="perfChart"></canvas></div>
             <div class="perf-disclaim" id="perfDisclaim">
                 * คำนวณจากการสมมติว่าถือหุ้นในพอร์ตปัจจุบัน (shares ปัจจุบัน) ตั้งแต่ 18 ก.ย. 2568
+            </div>
+        </div>
+
+        <div class="hedge-section" id="hedgeSection">
+            <div class="hedge-card">
+                <div class="hedge-row1">
+                    <span class="hsym">🛡️ <b id="hSym">—</b><span class="hsub" id="hExp"></span></span>
+                    <span class="hedge-badge safe" id="hStatus">—</span>
+                </div>
+                <div class="hedge-row2">
+                    <span class="hpl" id="hPL">—</span>
+                    <span>QQQ <b id="hQQQ">—</b></span>
+                    <span><b id="hDTE">—</b></span>
+                </div>
             </div>
         </div>
     </div>
@@ -274,6 +333,32 @@ async function yahooHistorical(yq, fromTs, toTs) {
     return closes?.find(c => c != null) ?? null;
 }
 
+/* ── Hedge: Long Put QQQ $600 Dec 2026 ─────────────────────────
+   OCC option symbol format: SYMBOL + YYMMDD + C/P + Strike×1000 (8 digits)
+   QQQ261218P00600000 = QQQ Dec 18 2026 $600 Put */
+const HEDGE = {
+    underlying:    'QQQ',
+    optionSymbol:  'QQQ261218P00600000',
+    type:          'Put',
+    strike:        600,
+    expiry:        '2026-12-18',
+    expiryLabel:   'Dec 18, 2026',
+    contracts:     1,
+    fillPrice:     16.90,
+    commission:    0.64,
+};
+HEDGE.costTotal = HEDGE.fillPrice * 100 * HEDGE.contracts + HEDGE.commission;
+HEDGE.breakeven = HEDGE.strike - HEDGE.fillPrice;   // 583.10
+
+async function fetchOptionQuote(occSym) {
+    const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(occSym)}?range=1d&interval=1d`;
+    try {
+        const r = await fetch(YAHOO_PROXY + encodeURIComponent(url));
+        const d = await r.json();
+        return d?.chart?.result?.[0]?.meta?.regularMarketPrice ?? null;
+    } catch (e) { return null; }
+}
+
 let PORT = [
     { broker:'Dime',      sym:'ARM',       yq:'ARM',     cur:'USD', cost:3990.77,  val:5529.29,  pl:1538.52,   pct:38.55,  shares:25.9262,  price:213.27 },
     { broker:'Dime',      sym:'CRWD',      yq:'CRWD',    cur:'USD', cost:4687.22,  val:5195.51,  pl:508.29,    pct:10.84,  shares:9.8443,   price:527.77 },
@@ -328,8 +413,63 @@ function toggleHide() {
     hidden = !hidden;
     document.getElementById('hideBtn').textContent = hidden ? 'Show Numbers' : 'Hide Numbers';
     render();
+    renderHedge();
 }
 const M = v => hidden ? '*****' : v;
+
+/* ── Render Hedge Book (compact) ── */
+async function renderHedge() {
+    const setText = (id, txt) => { const el = document.getElementById(id); if (el) el.textContent = txt; };
+    const setClass = (id, cls) => { const el = document.getElementById(id); if (el) el.className = cls; };
+
+    /* Symbol + expiry (e.g. "QQQ $600P  · Dec26 · 1ct") */
+    setText('hSym', `${HEDGE.underlying} $${HEDGE.strike}${HEDGE.type[0]}`);
+    setText('hExp', ` · Dec26 · ${HEDGE.contracts}ct`);
+
+    /* Days to expire */
+    const dte = Math.max(0, Math.ceil((new Date(HEDGE.expiry) - new Date()) / 86400000));
+    setText('hDTE', `${dte}d left`);
+
+    /* Live fetch: Put + QQQ underlying */
+    const [putPx, qqqPx] = await Promise.all([
+        fetchOptionQuote(HEDGE.optionSymbol),
+        yahooQuote(HEDGE.underlying),
+    ]);
+
+    if (putPx != null) {
+        const nowValue = putPx * 100 * HEDGE.contracts;
+        const pl = nowValue - HEDGE.costTotal;
+        const plPct = (pl / HEDGE.costTotal) * 100;
+        const sign = pl >= 0 ? '+' : '−';
+        setText('hPL', hidden ? '*****' : `${sign}$${Math.abs(pl).toFixed(0)} (${pl >= 0 ? '+' : ''}${plPct.toFixed(1)}%)`);
+        setClass('hPL', 'hpl ' + (hidden ? 'dim' : (pl >= 0 ? 'g' : 'r')));
+    } else {
+        setText('hPL', '—');
+    }
+
+    if (qqqPx != null) {
+        const cushion = ((qqqPx - HEDGE.breakeven) / qqqPx) * 100;
+        setText('hQQQ', `$${qqqPx.toFixed(2)} (${cushion >= 0 ? '+' : ''}${cushion.toFixed(1)}%)`);
+
+        /* Status badge based on QQQ vs strike/breakeven */
+        const badge = document.getElementById('hStatus');
+        if (qqqPx >= HEDGE.strike + 50) {
+            badge.className = 'hedge-badge safe';
+            badge.textContent = '🟢 SAFE';
+        } else if (qqqPx >= HEDGE.strike + 20) {
+            badge.className = 'hedge-badge warn';
+            badge.textContent = '🟡 WATCH';
+        } else if (qqqPx >= HEDGE.strike) {
+            badge.className = 'hedge-badge near';
+            badge.textContent = '🟠 NEAR ATM';
+        } else {
+            badge.className = 'hedge-badge itm';
+            badge.textContent = '🔴 ITM';
+        }
+    } else {
+        setText('hQQQ', '—');
+    }
+}
 
 /* ── Render ── */
 function render() {
@@ -546,6 +686,7 @@ async function startLoad() {
     }
 
     render();
+    renderHedge();   // fires async; updates hedge card when option/QQQ quote arrives
 }
 
 /* ── Performance vs Market (Since 18 Sep 2025) ──────────────── */
