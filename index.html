@@ -280,6 +280,7 @@
                 <button class="sb on" onclick="doSort('val',this)">SIZE</button>
                 <button class="sb"    onclick="doSort('pct',this)">GAIN%</button>
                 <button class="sb sb-az" onclick="doSort('sym',this)">A–Z</button>
+                <button class="sb"    onclick="doSort('broker',this)">BROKER</button>
             </div>
         </div>
         <div class="tscroll">
@@ -374,10 +375,7 @@ let PORT = [
     { broker:'Webull',    sym:'NBIS',      yq:'NBIS',    cur:'USD', cost:1601.71,  val:2792.94,  pl:1191.23,   pct:74.37,  shares:15.64848, price:178.48 },
     { broker:'Webull',    sym:'PANW',      yq:'PANW',    cur:'USD', cost:1527.64,  val:1876.98,  pl:349.34,    pct:22.87,  shares:9.0636,   price:207.09 },
     { broker:'Webull',    sym:'AXON',      yq:'AXON',    cur:'USD', cost:3754.00,  val:2654.16,  pl:-1099.84,  pct:-29.30, shares:6.58519,  price:403.05 },
-    { broker:'Streaming', sym:'BABA80',    yq:'9988.HK', cur:'HKD', cost:153.69,   val:229.28,   pl:75.59,     pct:49.19  },
     { broker:'Streaming', sym:'CATL01',    yq:'3750.HK', cur:'HKD', cost:1460.74,  val:2027.14,  pl:566.40,    pct:38.78  },
-    { broker:'Streaming', sym:'TENCENT80', yq:'0700.HK', cur:'HKD', cost:1164.81,  val:1263.42,  pl:98.61,     pct:8.47   },
-    { broker:'Streaming', sym:'XIAOMI80',  yq:'1810.HK', cur:'HKD', cost:813.27,   val:1334.22,  pl:520.95,    pct:64.06  },
 ];
 
 /* ── Chart ── */
@@ -402,10 +400,7 @@ const COLOR_MAP = {
     'PANW':      '#FA582D',  // Palo Alto orange
     'AXON':      '#DAA520',  // Axon goldenrod
     // Streaming (HK)
-    'BABA80':    '#FF6A00',  // Alibaba orange
     'CATL01':    '#00529A',  // CATL blue
-    'TENCENT80': '#1976D2',  // Tencent blue
-    'XIAOMI80':  '#FF6900',  // Xiaomi orange
 };
 
 /* ── Hide toggle ── */
@@ -573,7 +568,14 @@ function render() {
 function doSort(key, btn) {
     document.querySelectorAll('.sb').forEach(b => b.classList.remove('on'));
     btn.classList.add('on');
-    PORT.sort((a,b) => key === 'sym' ? a.sym.localeCompare(b.sym) : b[key] - a[key]);
+    PORT.sort((a,b) => {
+        if (key === 'sym') return a.sym.localeCompare(b.sym);
+        if (key === 'broker') {
+            const cmp = a.broker.localeCompare(b.broker);
+            return cmp !== 0 ? cmp : b.val - a.val;  // tiebreak by size
+        }
+        return b[key] - a[key];
+    });
     render();
 }
 
