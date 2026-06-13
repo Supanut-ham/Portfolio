@@ -66,6 +66,9 @@
         .perf-badge .pvalue { font-size: 13px; font-weight: 700; font-variant-numeric: tabular-nums; margin-top: 2px; }
         .perf-chart-wrap { flex: 1; position: relative; min-height: 80px; }
         .perf-disclaim { font-size: 9px; color: var(--dim); margin-top: 6px; font-style: italic; line-height: 1.4; }
+        .perf-realized { font-size: 11px; color: var(--dim); margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--border);
+                         font-variant-numeric: tabular-nums; display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: baseline; }
+        .perf-realized b { color: var(--text); font-weight: 600; }
 
         /* ── Hedge Book section (compact) ── */
         .hedge-section {
@@ -284,6 +287,7 @@
                 </div>
             </div>
             <div class="perf-chart-wrap"><canvas id="perfChart"></canvas></div>
+            <div class="perf-realized" id="perfRealized"></div>
             <div class="perf-disclaim" id="perfDisclaim">
                 * คำนวณจากการสมมติว่าถือหุ้นในพอร์ตปัจจุบัน (shares ปัจจุบัน) ตั้งแต่ 18 ก.ย. 2568
             </div>
@@ -600,6 +604,26 @@ function render() {
             }
         }
     });
+
+    updateRealizedStat(totPL);
+}
+
+/* Combined realized + unrealized line under the Performance chart (single row, no extra chart line) */
+function updateRealizedStat(unrealized) {
+    const el = document.getElementById('perfRealized');
+    if (!el) return;
+    if (hidden) { el.innerHTML = '<span>Realized + Net · *****</span>'; return; }
+    const trades = window.HAM_TRADES || [];
+    const realized = trades.reduce((s,t) => s + t.realized, 0);
+    const net = realized + unrealized;
+    const hasEst = trades.some(t => t.est);
+    const money = v => (v >= 0 ? '+$' : '-$') + Math.abs(Math.round(v)).toLocaleString();
+    const cls   = v => v >= 0 ? 'g' : 'r';
+    el.innerHTML =
+        `<span>Realized <b class="${cls(realized)}">${money(realized)}</b></span>` +
+        `<span>Unrealized <b class="${cls(unrealized)}">${money(unrealized)}</b></span>` +
+        `<span>Net <b class="${cls(net)}">${money(net)}</b></span>` +
+        (hasEst ? `<span class="hist-est">* China Exit = estimate</span>` : '');
 }
 
 function doSort(key, btn) {
