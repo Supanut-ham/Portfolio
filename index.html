@@ -374,20 +374,19 @@ const COLOR_MAP = {
     'ARM':       '#0091BD',  // ARM teal-blue
     'CRWD':      '#FA1F1F',  // CrowdStrike red
     'RBRK':      '#00B7AF',  // Rubrik teal
-    'GRAB':      '#00B14F',  // Grab green
     'ZS':        '#0033A0',  // Zscaler navy
     // Webull
     'NVDA':      '#76B900',  // NVIDIA green (iconic)
     'DDOG':      '#632CA6',  // Datadog purple
     'AMZN':      '#FF9900',  // Amazon orange
-    'SE':        '#EE4D2D',  // Sea/Shopee red-orange
-    'CRWV':      '#6366F1',  // CoreWeave indigo
     'MSFT':      '#00A4EF',  // Microsoft blue
     'NBIS':      '#FFE800',  // Nebius bright yellow
     'PANW':      '#FA582D',  // Palo Alto orange
     'AXON':      '#DAA520',  // Axon goldenrod
     // Streaming (HK)
     'CATL01':    '#00529A',  // CATL blue
+    // Cash
+    'CASH':      '#64748B',  // slate grey — dry powder (not invested)
 };
 
 /* ── Hide toggle ── */
@@ -479,6 +478,18 @@ function render() {
     roiEl.className = 'metric-value ' + (hidden ? 'dim' : (roi >= 0 ? 'g' : 'r'));
 
     document.getElementById('tbody').innerHTML = PORT.map(s => {
+        if (s.cash) {
+            const cWt     = hidden ? '' : `<span class="wt">${(s.val/totVal*100).toFixed(1)}%</span>`;
+            const cValUSD = hidden ? '*****' : '$' + Math.round(s.val).toLocaleString();
+            const cValTHB = hidden ? '*****' : '฿' + Math.round(s.val*THB).toLocaleString('th-TH');
+            return `<tr class="row-main" data-sym="CASH">
+                <td><div class="sym">💵 ${s.sym}${cWt}</div><div class="bk">${s.broker}</div></td>
+                <td class="ar col-mobile-hide">—</td>
+                <td class="ar"><div>${cValUSD}</div><div class="sub">${cValTHB}</div></td>
+                <td class="ar col-mobile-hide">—</td>
+                <td class="ar">—</td>
+            </tr>`;
+        }
         const g   = hidden ? 'dim' : (s.pl >= 0 ? 'g' : 'r');
         const cur = s.cur === 'HKD' ? 'HK$' : '$';
         const avgCost  = (s.shares && s.cur === 'USD') ? s.cost / s.shares : null;
@@ -592,7 +603,7 @@ async function startLoad() {
         PORT.forEach(s => { if (s.shares != null) shares[s.sym] = s.shares; });
 
         /* ── Step 1: คำนวณ shares จากราคา 27 เม.ย. 2026 (เฉพาะครั้งแรก แล้ว cache) ── */
-        const missing = PORT.filter(s => shares[s.sym] == null);
+        const missing = PORT.filter(s => shares[s.sym] == null && !s.cash);
         for (let i = 0; i < missing.length; i++) {
             const s = missing[i];
             ts.textContent = `คำนวณ shares… ${i+1}/${missing.length}`;
@@ -630,6 +641,7 @@ async function startLoad() {
         let done = 0;
         for (let i = 0; i < PORT.length; i++) {
             const s = PORT[i];
+            if (s.cash) continue;   // cash has no market quote
             try {
                 let p = null;
                 if (s.yq.endsWith('.HK')) {
@@ -720,7 +732,7 @@ async function loadPerformance() {
 
     /* Fetch candles for all PORT stocks + benchmarks */
     const targets = [
-        ...PORT.map(s => ({ sym: s.sym, yq: s.yq })),
+        ...PORT.filter(s => !s.cash).map(s => ({ sym: s.sym, yq: s.yq })),
         { sym: 'VOO', yq: 'VOO' },
         { sym: 'QQQ', yq: 'QQQ' },
     ];
@@ -754,6 +766,7 @@ async function loadPerformance() {
     const hkdPerUsd = 7.8;
     const sharesMap = {};
     for (const s of PORT) {
+        if (s.cash) continue;
         if (s.shares != null) {
             sharesMap[s.sym] = s.shares;
             continue;
@@ -779,6 +792,7 @@ async function loadPerformance() {
         let pv = 0;
         let allOk = true;
         for (const s of PORT) {
+            if (s.cash) continue;
             const shr = sharesMap[s.sym];
             if (shr == null) { skippedSyms.add(s.sym); continue; }
             const p = priceMaps[s.sym]?.[t];
