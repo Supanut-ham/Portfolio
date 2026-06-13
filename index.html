@@ -31,6 +31,7 @@
             padding: 13px 20px; border-bottom: 1px solid var(--border); flex-shrink: 0;
         }
         .logo { font-size: 11px; font-weight: 700; letter-spacing: .14em; color: var(--dim); }
+        .hleft { display: flex; align-items: center; gap: 14px; }
         .status { display: flex; align-items: center; gap: 8px; font-size: 11px; color: var(--dim); }
         .dot { width: 5px; height: 5px; border-radius: 50%; background: var(--green); flex-shrink: 0; }
         .dot.loading { background: #e3b341; animation: blink .9s infinite; }
@@ -52,7 +53,9 @@
 
         .body { display: flex; flex: 1; min-height: 0; }
         .chart-side { flex: 1; padding: 14px 12px; border-right: 1px solid var(--border); display: flex; flex-direction: column; gap: 12px; min-width: 0; }
-        .chart-wrap { flex: 1.3; position: relative; min-height: 0; }
+        .chart-wrap { flex: 1.3; min-height: 0; display: flex; align-items: stretch; gap: 14px; }
+        .chart-info { flex: 0 0 44%; min-width: 0; display: flex; flex-direction: column; justify-content: center; gap: 10px; }
+        .chart-canvas { flex: 1; position: relative; min-height: 0; min-width: 0; }
 
         /* ── Performance comparison section ── */
         .perf-section { flex: 1; display: flex; flex-direction: column; border-top: 1px solid var(--border); padding-top: 10px; min-height: 0; }
@@ -64,11 +67,11 @@
         .perf-badge .plabel { font-size: 9px; color: var(--dim); text-transform: uppercase; letter-spacing: .04em; display: flex; align-items: center; gap: 4px; }
         .perf-badge .pdot { width: 8px; height: 2px; display: inline-block; }
         .perf-badge .pvalue { font-size: 13px; font-weight: 700; font-variant-numeric: tabular-nums; margin-top: 2px; }
-        .perf-chart-wrap { flex: 1 1 0; position: relative; min-height: 50px; overflow: hidden; }
+        .perf-chart-wrap { flex: 1; position: relative; min-height: 80px; overflow: hidden; }
         .perf-disclaim { flex-shrink: 0; font-size: 9px; color: var(--dim); margin-top: 6px; font-style: italic; line-height: 1.4; }
-        .perf-realized { flex-shrink: 0; font-size: 11px; color: var(--dim); margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--border);
-                         font-variant-numeric: tabular-nums; display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: baseline; }
-        .perf-realized b { color: var(--text); font-weight: 600; }
+        .perf-realized { font-size: 12px; color: var(--dim); font-variant-numeric: tabular-nums;
+                         display: flex; flex-direction: column; gap: 5px; }
+        .perf-realized b { color: var(--text); font-weight: 700; margin-left: 4px; }
 
         /* ── Hedge Book section (compact) ── */
         .hedge-section {
@@ -186,8 +189,9 @@
                 border-right: none; border-bottom: 1px solid var(--border);
                 padding: 10px 8px;
             }
-            /* ซ่อน Performance vs Market บนมือถือ — ดูได้บนคอม */
+            /* ซ่อน Performance vs Market + info panel บนมือถือ — ดูได้บนคอม (realized อยู่ใน tab History) */
             .perf-section { display: none; }
+            .chart-info { display: none; }
             /* Hedge section — โชว์บนมือถือด้วย (สำคัญ) */
             .hedge-section { padding: 6px 8px 0; }
             .hedge-row2 { font-size: 10.5px; gap: 8px; }
@@ -243,7 +247,11 @@
 <body>
 
 <header>
-    <span class="logo">PORTFOLIO · HAM</span>
+    <div class="hleft">
+        <span class="logo">PORTFOLIO · HAM</span>
+        <button class="tab on" id="tabHoldings" onclick="switchView('holdings')">💼 HOLDINGS</button>
+        <button class="tab"    id="tabHistory"  onclick="switchView('history')">📕 HISTORY</button>
+    </div>
     <div class="status">
         <div class="dot loading" id="dot"></div>
         <span id="ts">กำลังโหลด...</span>
@@ -251,11 +259,6 @@
         <button class="btn" onclick="clearCache()" title="รีเซ็ต cache หุ้น">✕ cache</button>
     </div>
 </header>
-
-<div class="tabbar">
-    <button class="tab on" id="tabHoldings" onclick="switchView('holdings')">💼 HOLDINGS</button>
-    <button class="tab"    id="tabHistory"  onclick="switchView('history')">📕 HISTORY</button>
-</div>
 
 <div class="metrics" id="holdingsMetrics">
     <div class="metric"><div class="metric-label">Total Value</div><div class="metric-value" id="mVal">—</div><div class="metric-sub" id="mValUsd">—</div></div>
@@ -265,7 +268,15 @@
 
 <div class="body" id="holdingsView">
     <div class="chart-side">
-        <div class="chart-wrap"><canvas id="chart"></canvas></div>
+        <div class="chart-wrap">
+            <div class="chart-info">
+                <div class="perf-realized" id="perfRealized"></div>
+                <div class="perf-disclaim" id="perfDisclaim">
+                    * ดูคร่าวๆ เทียบ benchmark ตั้งแต่ 18 ก.ย. 2568 · สมมติถือ shares ปัจจุบันตลอด period
+                </div>
+            </div>
+            <div class="chart-canvas"><canvas id="chart"></canvas></div>
+        </div>
 
         <div class="perf-section">
             <div class="perf-header">
@@ -287,10 +298,6 @@
                 </div>
             </div>
             <div class="perf-chart-wrap"><canvas id="perfChart"></canvas></div>
-            <div class="perf-realized" id="perfRealized"></div>
-            <div class="perf-disclaim" id="perfDisclaim">
-                * คำนวณจากการสมมติว่าถือหุ้นในพอร์ตปัจจุบัน (shares ปัจจุบัน) ตั้งแต่ 18 ก.ย. 2568
-            </div>
         </div>
 
         <div class="hedge-section" id="hedgeSection">
