@@ -1,0 +1,14 @@
+// Closed trades / realized P&L — feeds the "History" tab of the Portfolio Dashboard.
+// Source of truth + maintenance rule: ../Trade_Log.md
+// On every closed trade: add a row in Trade_Log.md AND an entry here, then push to GitHub Pages.
+// Fields: realized/cost/proceeds are USD (for totals). `cur` = native currency of `price`. `est:true` = soft numbers.
+window.HAM_TRADES = [
+    // ── Exit Day · 12 Jun 2026 · from broker fills (solid) ──
+    { date:'2026-06-12', sym:'CRWV', name:'CoreWeave',  event:'Exit Day',   broker:'Webull', cur:'USD', qty:17.0308,  price:98.10, cost:1601.71, proceeds:1668.88, realized:67.17,  pct:4.2,  est:false, reason:'Sell Gate: CDC แดง 5 วัน + debt alert (หุ้นกู้ 9.625%)' },
+    { date:'2026-06-12', sym:'SE',   name:'Sea Limited', event:'Exit Day',   broker:'Webull', cur:'USD', qty:10,       price:83.60, cost:1569.97, proceeds:835.07,  realized:-734.90, pct:-46.8, est:false, reason:'นอก AI thesis (Tier E)' },
+    { date:'2026-06-12', sym:'GRAB', name:'Grab Holdings', event:'Exit Day', broker:'Dime',   cur:'USD', qty:258.0749, price:3.27,  cost:1558.46, proceeds:843.85,  realized:-714.61, pct:-45.9, est:false, reason:'นอก thesis · Tiger Global ล้างพอร์ต + CEO ขายหุ้น' },
+    // ── China Exit · 28 May 2026 · THB, reverse-engineered → USD @ FX 36.4 (estimate) ──
+    { date:'2026-05-28', sym:'XIAOMI80',  name:'Xiaomi (1810.HK)',  event:'China Exit', broker:'Streaming', cur:'THB', qty:3620, price:11.80, cost:714,  proceeds:1172, realized:457, pct:64.1, est:true, reason:'Geopolitical + Xiaomi Thesis Alert (EV ไม่โต)' },
+    { date:'2026-05-28', sym:'TENCENT80', name:'Tencent (0700.HK)', event:'China Exit', broker:'Streaming', cur:'THB', qty:2200, price:18.00, cost:1001, proceeds:1086, realized:85,  pct:8.5,  est:true, reason:'China exit (geopolitical + macro)' },
+    { date:'2026-05-28', sym:'BABA80',    name:'Alibaba (9988.HK)', event:'China Exit', broker:'Streaming', cur:'THB', qty:1500, price:5.15,  cost:142,  proceeds:212,  realized:70,  pct:49.2, est:true, reason:'China exit (geopolitical + macro)' },
+];
