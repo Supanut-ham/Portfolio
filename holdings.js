@@ -16,7 +16,4 @@ window.HAM_PORT = [
     { broker:'Webull',    sym:'PANW',      yq:'PANW',    cur:'USD', cost:1527.64,  val:1876.98,  pl:349.34,    pct:22.87,  shares:9.0636,   price:207.09 },
     { broker:'Webull',    sym:'AXON',      yq:'AXON',    cur:'USD', cost:3754.00,  val:2654.16,  pl:-1099.84,  pct:-29.30, shares:6.58519,  price:403.05 },
     { broker:'Streaming', sym:'CATL01',    yq:'3750.HK', cur:'HKD', cost:1460.74,  val:2027.14,  pl:566.40,    pct:38.78  },
-    // Idle cash (dry powder) — included in NAV/allocation, excluded from P/L & ROI (no cost basis, no live fetch).
-    // China Exit ~$2,470 + Exit Day 12/6 ~$3,348. Update `val` when cash deployed or new sells settle.
-    { broker:'Cash (idle)', sym:'CASH',    yq:null,      cur:'USD', cost:0,         val:5818,     pl:0,         pct:0,      cash:true },
 ];
