@@ -7,6 +7,7 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2"></script>
     <script src="holdings.js"></script>
+    <script src="trades.js"></script>
     <style>
         :root {
             --bg:      #0d1117;
@@ -133,6 +134,32 @@
         .r   { color: var(--red); }
         .dim { color: var(--dim); }
 
+        /* ── Tab bar (Holdings / History) ── */
+        .tabbar { display: flex; gap: 4px; padding: 6px 12px; border-bottom: 1px solid var(--border); flex-shrink: 0; }
+        .tab { background: none; border: 1px solid transparent; color: var(--dim); font-size: 11px; font-weight: 700;
+               letter-spacing: .08em; padding: 6px 14px; border-radius: 6px; cursor: pointer; font-family: inherit; }
+        .tab:hover { background: var(--surface); }
+        .tab.on { color: var(--blue); background: rgba(88,166,255,.12); }
+
+        /* ── History view ── */
+        #historyView { flex: 1; display: flex; flex-direction: column; min-height: 0; overflow-y: auto; }
+        .hist-metrics { display: grid; grid-template-columns: repeat(4,1fr); border-bottom: 1px solid var(--border); flex-shrink: 0; }
+        .hist-metric { padding: 14px 18px; border-right: 1px solid var(--border); }
+        .hist-metric:last-child { border-right: none; }
+        .hist-mlabel { font-size: 10px; color: var(--dim); text-transform: uppercase; letter-spacing: .08em; margin-bottom: 5px; }
+        .hist-mvalue { font-size: 20px; font-weight: 700; letter-spacing: -.03em; font-variant-numeric: tabular-nums; }
+        .hist-msub { font-size: 11px; color: var(--dim); margin-top: 3px; }
+        .hist-event { font-size: 10px; font-weight: 700; color: var(--dim); text-transform: uppercase; letter-spacing: .08em;
+                      padding: 10px 12px 4px; }
+        .hist-est { font-size: 9px; color: var(--dim); font-weight: 400; text-transform: none; letter-spacing: 0; }
+        .hist-reason { font-size: 10px; color: var(--dim); margin-top: 2px; }
+        .hist-disclaim { font-size: 10px; color: var(--dim); padding: 10px 12px 16px; line-height: 1.5; }
+        @media (max-width: 768px) {
+            .hist-metrics { grid-template-columns: repeat(2,1fr); }
+            .hist-metric:nth-child(2) { border-right: none; }
+            .hist-mvalue { font-size: 17px; }
+        }
+
         .hide-row { padding: 8px 12px; border-bottom: 1px solid var(--border); flex-shrink: 0; }
         .hide-btn {
             width: 100%; background: none; border: 1px solid var(--border);
@@ -222,13 +249,18 @@
     </div>
 </header>
 
-<div class="metrics">
+<div class="tabbar">
+    <button class="tab on" id="tabHoldings" onclick="switchView('holdings')">💼 HOLDINGS</button>
+    <button class="tab"    id="tabHistory"  onclick="switchView('history')">📕 HISTORY</button>
+</div>
+
+<div class="metrics" id="holdingsMetrics">
     <div class="metric"><div class="metric-label">Total Value</div><div class="metric-value" id="mVal">—</div><div class="metric-sub" id="mValUsd">—</div></div>
     <div class="metric"><div class="metric-label">Unrealized P/L</div><div class="metric-value" id="mPL">—</div><div class="metric-sub" id="mPLUsd">—</div></div>
     <div class="metric"><div class="metric-label">ROI</div><div class="metric-value" id="mROI">—</div><div class="metric-sub" id="mROIUsd">&nbsp;</div></div>
 </div>
 
-<div class="body">
+<div class="body" id="holdingsView">
     <div class="chart-side">
         <div class="chart-wrap"><canvas id="chart"></canvas></div>
 
@@ -297,6 +329,27 @@
             </table>
         </div>
     </div>
+</div>
+
+<div id="historyView" style="display:none">
+    <div class="hist-metrics">
+        <div class="hist-metric"><div class="hist-mlabel">Realized P&L</div><div class="hist-mvalue" id="hRealized">—</div><div class="hist-msub" id="hRealizedTHB">&nbsp;</div></div>
+        <div class="hist-metric"><div class="hist-mlabel">Win / Loss</div><div class="hist-mvalue" id="hWinLoss">—</div><div class="hist-msub" id="hWinRate">&nbsp;</div></div>
+        <div class="hist-metric"><div class="hist-mlabel">Best Trade</div><div class="hist-mvalue g" id="hBest">—</div><div class="hist-msub" id="hBestSub">&nbsp;</div></div>
+        <div class="hist-metric"><div class="hist-mlabel">Worst Trade</div><div class="hist-mvalue r" id="hWorst">—</div><div class="hist-msub" id="hWorstSub">&nbsp;</div></div>
+    </div>
+    <div class="tscroll" style="flex:1">
+        <table>
+            <thead><tr>
+                <th>DATE / SYMBOL</th>
+                <th class="ar col-mobile-hide">PROCEEDS</th>
+                <th class="ar">REALIZED</th>
+                <th class="ar">%</th>
+            </tr></thead>
+            <tbody id="histBody"></tbody>
+        </table>
+    </div>
+    <div class="hist-disclaim" id="histDisclaim"></div>
 </div>
 
 <script>
@@ -885,6 +938,80 @@ function renderPerformance(data) {
             },
         },
     });
+}
+
+/* ── History tab ── */
+let historyRendered = false;
+function switchView(view) {
+    const isHist = view === 'history';
+    document.getElementById('holdingsView').style.display    = isHist ? 'none' : 'flex';
+    document.getElementById('holdingsMetrics').style.display = isHist ? 'none' : 'grid';
+    document.getElementById('historyView').style.display     = isHist ? 'flex' : 'none';
+    document.getElementById('tabHoldings').classList.toggle('on', !isHist);
+    document.getElementById('tabHistory').classList.toggle('on', isHist);
+    if (isHist && !historyRendered) { renderHistory(); historyRendered = true; }
+}
+
+function renderHistory() {
+    const trades = (window.HAM_TRADES || []).slice().sort((a,b) => b.date.localeCompare(a.date));
+    if (!trades.length) {
+        document.getElementById('histBody').innerHTML = '<tr><td colspan="4" style="padding:20px;color:var(--dim)">ยังไม่มีประวัติซื้อขาย</td></tr>';
+        return;
+    }
+
+    const totReal = trades.reduce((s,t) => s + t.realized, 0);
+    const wins    = trades.filter(t => t.realized >= 0).length;
+    const losses  = trades.length - wins;
+    const winRate = Math.round(wins / trades.length * 100);
+    const best    = trades.reduce((a,b) => b.pct > a.pct ? b : a);
+    const worst   = trades.reduce((a,b) => b.pct < a.pct ? b : a);
+    const hasEst  = trades.some(t => t.est);
+
+    const rEl = document.getElementById('hRealized');
+    rEl.textContent = (totReal >= 0 ? '+$' : '-$') + Math.abs(Math.round(totReal)).toLocaleString();
+    rEl.className = 'hist-mvalue ' + (totReal >= 0 ? 'g' : 'r');
+    document.getElementById('hRealizedTHB').textContent =
+        (totReal >= 0 ? '+฿' : '-฿') + Math.abs(Math.round(totReal * THB)).toLocaleString('th-TH') + (hasEst ? ' *' : '');
+
+    document.getElementById('hWinLoss').textContent  = wins + ' / ' + losses;
+    document.getElementById('hWinRate').textContent  = 'win rate ' + winRate + '%';
+    document.getElementById('hBest').textContent     = '+' + best.pct.toFixed(1) + '%';
+    document.getElementById('hBestSub').textContent  = best.sym;
+    document.getElementById('hWorst').textContent    = worst.pct.toFixed(1) + '%';
+    document.getElementById('hWorstSub').textContent = worst.sym;
+
+    /* Group rows by event */
+    let html = '';
+    let lastEvent = null;
+    for (const t of trades) {
+        if (t.event !== lastEvent) {
+            const evTrades = trades.filter(x => x.event === t.event);
+            const evSum = evTrades.reduce((s,x) => s + x.realized, 0);
+            const evSign = evSum >= 0 ? '+$' : '-$';
+            const evCls  = evSum >= 0 ? 'g' : 'r';
+            html += `<tr><td colspan="4" class="hist-event">${t.event} · ${t.date}
+                     <span class="${evCls}">${evSign}${Math.abs(Math.round(evSum)).toLocaleString()}</span>
+                     ${evTrades.some(x=>x.est) ? '<span class="hist-est">· estimate</span>' : ''}</td></tr>`;
+            lastEvent = t.event;
+        }
+        const g = t.realized >= 0 ? 'g' : 'r';
+        const cur = t.cur === 'THB' ? '฿' : '$';
+        const real = (t.realized >= 0 ? '+$' : '-$') + Math.abs(Math.round(t.realized)).toLocaleString();
+        const proceeds = '$' + Math.round(t.proceeds).toLocaleString();
+        html += `<tr>
+            <td><div class="sym ${g}">${t.sym}${t.est ? ' <span class="hist-est">~</span>' : ''}</div>
+                <div class="bk">${t.qty.toLocaleString()} @ ${cur}${t.price} · ${t.broker}</div>
+                <div class="hist-reason">${t.reason}</div></td>
+            <td class="ar col-mobile-hide">${proceeds}</td>
+            <td class="ar ${g}">${real}</td>
+            <td class="ar ${g}"><b>${t.pct >= 0 ? '+' : ''}${t.pct.toFixed(1)}%</b></td>
+        </tr>`;
+    }
+    document.getElementById('histBody').innerHTML = html;
+
+    document.getElementById('histDisclaim').innerHTML =
+        'Realized P&L = กำไร/ขาดทุนที่ปิด position แล้ว · นับรวมตัวที่ขายขาดทุนด้วย (กัน survivorship bias)' +
+        (hasEst ? '<br>* China Exit = ตัวเลขประมาณ (cost reverse-engineer · USD แปลงที่ FX 36.4) — อัพเดทได้เมื่อมีใบ Buy ครบ' : '');
 }
 
 /* ── Boot ── */
