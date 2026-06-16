@@ -585,7 +585,7 @@ function render() {
     }).join('');
 
     if (chartInst) chartInst.destroy();
-    const sorted = [...PORT];
+    const sorted = [...PORT].sort((a,b) => b.val - a.val);   // โดนัทเรียงตาม size เสมอ (ไม่ขึ้นกับ table sort)
     chartInst = new Chart(document.getElementById('chart'), {
         type: 'doughnut',
         data: {
