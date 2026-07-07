@@ -5,7 +5,7 @@
 // Command Center reads them as-is (no fetch) — refresh by updating values here.
 window.HAM_PORT = [
     { broker:'Dime',      sym:'ARM',       yq:'ARM',     cur:'USD', cost:3990.77,  val:5529.29,  pl:1538.52,   pct:38.55,  shares:25.9262,  price:213.27 },
-    { broker:'Dime',      sym:'CRWD',      yq:'CRWD',    cur:'USD', cost:4687.22,  val:5195.51,  pl:508.29,    pct:10.84,  shares:9.8443,   price:527.77 },
+    { broker:'Dime',      sym:'CRWD',      yq:'CRWD',    cur:'USD', cost:4687.22,  val:7851.03,  pl:3163.81,   pct:67.50,  shares:39.3772,  price:199.38 }, // 4-for-1 split 2 Jul 2026
     { broker:'Dime',      sym:'RBRK',      yq:'RBRK',    cur:'USD', cost:1564.88,  val:1284.36,  pl:-280.52,   pct:-17.93, shares:20.6025,  price:62.34  },
     { broker:'Dime',      sym:'ZS',        yq:'ZS',      cur:'USD', cost:1387.87,  val:863.84,   pl:-524.03,   pct:-37.76, shares:5.6783,   price:152.13 },
     { broker:'Webull',    sym:'NVDA',      yq:'NVDA',    cur:'USD', cost:1544.65,  val:1812.26,  pl:267.61,    pct:17.33,  shares:8.42717,  price:215.05 },
