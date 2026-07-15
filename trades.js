@@ -3,6 +3,9 @@
 // On every closed trade: add a row in Trade_Log.md AND an entry here, then push to GitHub Pages.
 // Fields: realized/cost/proceeds are USD (for totals). `cur` = native currency of `price`. `est:true` = soft numbers.
 window.HAM_TRADES = [
+    // ── CDC Trim 50% · 14 Jul 2026 · from broker fills (solid) — buy-back armed if CDC turns green ──
+    { date:'2026-07-14', sym:'ARM',  name:'Arm Holdings', event:'CDC Trim 50%', broker:'Dime',   cur:'USD', qty:12, price:281.98, cost:1847.14, proceeds:3383.68, realized:1536.54, pct:83.19, est:false, reason:'CDC 1D แดง + Valuation Gate แพงจัด (Fwd P/E 145x) — trim ล็อคทุนคืน เหลือ 13.9262sh house money · ซื้อคืนถ้า CDC เขียว' },
+    { date:'2026-07-14', sym:'NBIS', name:'Nebius Group', event:'CDC Trim 50%', broker:'Webull', cur:'USD', qty:7,  price:201.75, cost:716.49,  proceeds:1410.70, realized:694.21,  pct:96.89, est:false, reason:'CDC 1D แดง — เดิมแผน HOLD (ถูก ~4.7x EV/S) แต่แฮมเลือก trim ตาม ARM · เหลือ 8.64848sh · ซื้อคืนถ้า CDC เขียว' },
     // ── Exit Day · 12 Jun 2026 · from broker fills (solid) ──
     { date:'2026-06-12', sym:'CRWV', name:'CoreWeave',  event:'Exit Day',   broker:'Webull', cur:'USD', qty:17.0308,  price:98.10, cost:1601.71, proceeds:1668.88, realized:67.17,  pct:4.2,  est:false, reason:'Sell Gate: CDC แดง 5 วัน + debt alert (หุ้นกู้ 9.625%)' },
     { date:'2026-06-12', sym:'SE',   name:'Sea Limited', event:'Exit Day',   broker:'Webull', cur:'USD', qty:10,       price:83.60, cost:1569.97, proceeds:835.07,  realized:-734.90, pct:-46.8, est:false, reason:'นอก AI thesis (Tier E)' },
