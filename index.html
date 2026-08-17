@@ -447,6 +447,7 @@ const COLOR_MAP = {
     'NBIS':      '#FFE800',  // Nebius bright yellow
     'PANW':      '#FA582D',  // Palo Alto orange
     'AXON':      '#DAA520',  // Axon goldenrod
+    'TSM':       '#C8102E',  // TSMC red (เพิ่ม 17/8/26 พร้อม position ใหม่)
     // Streaming (HK)
     'CATL01':    '#00529A',  // CATL blue
 };
@@ -584,16 +585,36 @@ function render() {
         </tr>`;
     }).join('');
 
-    if (chartInst) chartInst.destroy();
-    const sorted = [...PORT].sort((a,b) => b.val - a.val);   // โดนัทเรียงตาม size เสมอ (ไม่ขึ้นกับ table sort)
+    /* โดนัทเรียงตามปุ่ม sort เดียวกับตาราง (SIZE/GAIN%/A–Z/BROKER) · สีผูกกับ ticker ผ่าน COLOR_MAP จึงไม่สลับ */
+    const sorted = PORT;
+    const dLabels = sorted.map(s => s.sym);
+    const dData   = sorted.map(s => s.val);
+    const dColors = sorted.map(s => COLOR_MAP[s.sym] || '#8b949e');   // fallback กันหุ้นใหม่ที่ยังไม่ได้ตั้งสี
+
+    /* ⚡ update แทน destroy+recreate → Chart.js tween มุม arc + สีให้เอง (เดิมกระพริบเพราะสร้างใหม่ทุกรอบ) */
+    if (chartInst) {
+        chartInst.data.labels                       = dLabels;
+        chartInst.data.datasets[0].data             = dData;
+        chartInst.data.datasets[0].backgroundColor  = dColors;
+        chartInst.update();
+        updateRealizedStat(totPL);
+        return;
+    }
+
     chartInst = new Chart(document.getElementById('chart'), {
         type: 'doughnut',
         data: {
-            labels: sorted.map(s => s.sym),
-            datasets: [{ data: sorted.map(s => s.val), backgroundColor: sorted.map(s => COLOR_MAP[s.sym]), borderColor:'#0d1117', borderWidth:2, hoverBorderWidth:0 }]
+            labels: dLabels,
+            datasets: [{ data: dData, backgroundColor: dColors, borderColor:'#0d1117', borderWidth:2, hoverBorderWidth:0 }]
         },
         options: {
             responsive:true, maintainAspectRatio:false, cutout:'55%',
+            animation: { duration: 750, easing: 'easeInOutCubic' },
+            animations: {
+                colors:   { type:'color', duration: 450, easing:'easeOutQuad' },
+                numbers:  { type:'number', duration: 750, easing:'easeInOutCubic' }
+            },
+            transitions: { active: { animation: { duration: 200 } } },
             plugins: {
                 legend:{ display: false },
                 tooltip:{ callbacks:{ label: ctx => ` $${Math.round(ctx.raw).toLocaleString()}` } },
@@ -633,17 +654,25 @@ function updateRealizedStat(unrealized) {
         (hasEst ? `<span class="hist-est">* China Exit = estimate</span>` : '');
 }
 
-function doSort(key, btn) {
-    document.querySelectorAll('.sb').forEach(b => b.classList.remove('on'));
-    btn.classList.add('on');
+/* จำโหมด sort ปัจจุบันไว้ เพื่อ re-apply หลังราคา live โหลดครบ (ค่าเริ่มต้น = SIZE) */
+let currentSort = 'val';
+
+function applySort() {
     PORT.sort((a,b) => {
-        if (key === 'sym') return a.sym.localeCompare(b.sym);
-        if (key === 'broker') {
+        if (currentSort === 'sym') return a.sym.localeCompare(b.sym);
+        if (currentSort === 'broker') {
             const cmp = a.broker.localeCompare(b.broker);
             return cmp !== 0 ? cmp : b.val - a.val;  // tiebreak by size
         }
-        return b[key] - a[key];
+        return b[currentSort] - a[currentSort];
     });
+}
+
+function doSort(key, btn) {
+    document.querySelectorAll('.sb').forEach(b => b.classList.remove('on'));
+    btn.classList.add('on');
+    currentSort = key;
+    applySort();
     render();
 }
 
@@ -755,6 +784,9 @@ async function startLoad() {
         document.getElementById('dot').className = 'dot offline';
     }
 
+    /* ⭐ ราคา live ครบแล้ว -> เรียงใหม่ด้วยค่าจริง ตามโหมดที่ผู้ใช้เลือกอยู่ (default = SIZE)
+       เดิมลำดับค้างอยู่ที่ค่า baseline จาก holdings.js ทำให้เรียงไม่ตรงกับ size จริง */
+    applySort();
     render();
     renderHedge();   // fires async; updates hedge card when option/QQQ quote arrives
 }
@@ -1046,7 +1078,7 @@ function renderHistory() {
 }
 
 /* ── Boot ── */
-PORT.sort((a,b) => b.val - a.val);   // เรียงตาม SIZE เป็นค่าเริ่มต้น
+applySort();   // เรียงตาม SIZE เป็นค่าเริ่มต้น (currentSort = 'val')
 render();
 startLoad().then(() => {
     /* Skip Performance chart on mobile (hidden by CSS, no need to fetch ~20 candles) */
