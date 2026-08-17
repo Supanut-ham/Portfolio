@@ -17,7 +17,7 @@ window.HAM_PORT = [
     { broker:'Webull',    sym:'PANW',      yq:'PANW',    cur:'USD', cost:1527.64,  val:1876.98,  pl:349.34,    pct:22.87,  shares:9.0636,   price:207.09 },
     { broker:'Webull',    sym:'AXON',      yq:'AXON',    cur:'USD', cost:3754.00,  val:2654.16,  pl:-1099.84,  pct:-29.30, shares:6.58519,  price:403.05 },
     { broker:'Streaming', sym:'CATL01',    yq:'3750.HK', cur:'HKD', cost:1460.74,  val:2027.14,  pl:566.40,    pct:38.78  },
-    // 🛡️ HEDGE — QQQ $600 Put exp 18 Dec 2026 · 1 สัญญา = shares 100 (ราคาเป็นต่อหุ้น มูลค่า = price x 100)
-    // เพิ่ม 17/8/26 · ก่อนหน้านี้ตกหล่นจาก holdings.js ทั้งที่ position ACTIVE ตั้งแต่ 18/5/26 → ขาดทุนไม่ถูกนับในการวัดผลพอร์ต
-    { broker:'Webull',    sym:'QQQ P600',  yq:'QQQ261218P00600000', cur:'USD', cost:1690.64, val:625.00, pl:-1065.64, pct:-63.03, shares:100, price:6.25 },
 ];
+// 🛡️ HEDGE (QQQ $600 Put exp 18/12/26) — ⛔ ห้ามใส่ในไฟล์นี้
+// มี `const HEDGE` + renderHedge() แยกอยู่แล้วใน Dashboard/index.html (บรรทัด ~405) ซึ่งดึงราคาสดจาก Yahoo เองอยู่แล้ว
+// ใส่ซ้ำที่นี่ = โชว์ 2 ที่ + ปน donut chart กับหุ้น · เคยเผลอใส่ 17/8/26 แล้วถอนออกวันเดียวกัน
