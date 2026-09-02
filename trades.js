@@ -3,6 +3,8 @@
 // On every closed trade: add a row in Trade_Log.md AND an entry here, then push to GitHub Pages.
 // Fields: realized/cost/proceeds are USD (for totals). `cur` = native currency of `price`. `est:true` = soft numbers.
 window.HAM_TRADES = [
+    // ── CATL01 Exit (ปิด position) · 2 Sep 2026 · THB · realized จากหน้า Portfolio โบรก (solid) · cost = derive จาก realized · USD @ FX 33.3 ──
+    { date:'2026-09-02', sym:'CATL01', name:'CATL (3750.HK) DR', event:'Exit', broker:'Streaming', cur:'THB', qty:11000, price:5.50, cost:1538.36, proceeds:1816.82, realized:278.46, pct:18.10, est:true, reason:'หลุดเทรน + หลุด SMA200 (3750.HK 568 HKD ต่ำกว่าเส้น ~573) = sell trigger #1 ที่ armed ไว้ 6/7/26 ยิง · ไม่ใช่ Thesis Alert (share 40.2% ยังดี) · Realized จริง +฿9,272.62 · ไม่มี buy-back armed (Tier C/D ไม่ใช่ AI-direct)' },
     // ── DDOG Trim 42% · 20 Aug 2026 · from broker fill (solid) — discretionary ไม่ใช่ signal ──
     { date:'2026-08-20', sym:'DDOG', name:'Datadog', event:'Trim 42%', broker:'Webull', cur:'USD', qty:5.15676, price:232.704, cost:660.31, proceeds:1198.68, realized:538.37, pct:81.53, est:false, reason:'แฮมตัดสินใจเอง — CDC First Red 17/8 (T+1 18/8 ปิดแล้ว) + หลุด 20d/50d SMA + OpenAI RL pause · ⚠️ Sell Gate ผ่านแค่ 1/2 ขา (valuation ไม่เข้าเกณฑ์แพง: EV/S 20.2x vs ค่ากลาง 10 ปี 19.3x) → Green แนะ HOLD · เหลือ 7.11738sh' },
     // ── CDC Trim 50% · 14 Jul 2026 · from broker fills (solid) — buy-back armed if CDC turns green ──
